@@ -105,8 +105,16 @@ guided tour end to end. That is exactly what a judge will do.
 
 ## Operational notes
 
-- **Restarts are cheap.** A funded wallet stays funded and `deployment.json`
-  pins the contract, so the backend comes back without touching the faucet.
+- **The first start scans the chain for DUST, and that is slow.** DUST pays
+  every fee, and the wallet only sees its own DUST generation after its dust
+  scanner reaches the block that registered it. The scanner runs at roughly
+  200 blocks/second from genesis, so on PreProd (~2.1M blocks) expect about
+  three hours before the first transaction can be paid for. Progress is logged
+  as `dust wallet scanning` with the applied block index, so you can tell
+  progress from a hang — without that log the two look identical.
+- **Keep the process up.** The wallet holds its scan in memory, so restarting
+  repeats it. A funded wallet stays funded and `deployment.json` pins the
+  contract, but plan restarts for when the demo is idle.
 - **Transactions are serialised** through one queue, because one wallet funds
   them all. Several visitors at once will queue rather than fail.
 - **Sessions are in memory.** A restart drops visitors' local credit notes;

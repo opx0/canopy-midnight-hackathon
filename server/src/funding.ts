@@ -78,6 +78,32 @@ export const fund = async (
   logger.info({ night: night(state).toString() }, "NIGHT available");
 
   if (dust(state) === 0n) {
+    const startedScanAt = Date.now();
+    state = await Rx.firstValueFrom(
+      wallet.state().pipe(
+        Rx.throttleTime(10_000, undefined, { leading: true, trailing: true }),
+        Rx.tap((current: FacadeState) => {
+          const p = current.dust.state.progress;
+          logger.info(
+            {
+              seconds: Math.round((Date.now() - startedScanAt) / 1000),
+              applied: p.appliedIndex.toString(),
+              highest: p.highestIndex.toString(),
+              connected: p.isConnected,
+              dust: dust(current).toString(),
+            },
+            "dust wallet scanning",
+          );
+        }),
+        Rx.filter(
+          (current: FacadeState) =>
+            dust(current) > 0n ||
+            current.dust.state.progress.isCompleteWithin(64n),
+        ),
+        Rx.timeout({ each: 3_600_000 }),
+      ),
+    );
+
     const nightUtxos = (current: FacadeState) =>
       current.unshielded.availableCoins.filter(
         (coin) => coin.utxo.type === unshieldedToken().raw,

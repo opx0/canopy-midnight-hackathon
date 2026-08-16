@@ -257,6 +257,9 @@ These are real, and stating them is more useful than pretending otherwise.
   commitment.
 - **Tree capacity.** The credit tree is depth 10, so 1,024 credits per
   deployment. Raising it costs a little proving time per level and nothing else.
+- **First start is slow.** The wallet must scan the chain from genesis before
+  it can see the DUST that pays fees — about three hours on PreProd. It runs
+  once per process; `docs/deployment.md` covers it.
 - **The demo's fee wallet is custodial.** That is what removes the wallet
   install from a visitor's path. It has no bearing on the protocol: the fee
   payer and the contract identity are deliberately separate.
