@@ -1,0 +1,42 @@
+# Runs Canopy the way the public demo runs it: a proof server alongside the
+# backend, with the built frontend served from the same origin.
+#
+#   docker compose up -d --build
+#
+# The contract must already be deployed (npm run deploy-contract) so that
+# server/deployment.json exists and is mounted in.
+
+services:
+  proof-server:
+    image: midnightntwrk/proof-server:8.1.0
+    environment:
+      PORT: 6300
+    ports:
+      - "127.0.0.1:6300:6300"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:6300/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  canopy:
+    build: .
+    depends_on:
+      proof-server:
+        condition: service_healthy
+    environment:
+      CANOPY_NETWORK: ${CANOPY_NETWORK:-preview}
+      CANOPY_PROOF_SERVER: http://proof-server:6300
+      CANOPY_SEED: ${CANOPY_SEED:?set CANOPY_SEED to the seed the contract was deployed with}
+      PORT: 3001
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ./server/deployment.json:/app/server/deployment.json:ro
+      - canopy-state:/app/.midnight
+    restart: unless-stopped
+
+volumes:
+  canopy-state:
