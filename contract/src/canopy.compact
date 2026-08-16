@@ -1,0 +1,192 @@
+pragma language_version 0.23;
+
+import CompactStandardLibrary;
+
+export ledger creditTree: HistoricMerkleTree<10, Bytes<32>>;
+
+export ledger retiredCredits: Set<Bytes<32>>;
+
+export struct Batch {
+  project: Opaque<"string">,
+  vintage: Uint<16>,
+  tonnes: Uint<64>,
+  credits: Uint<16>,
+}
+export ledger batches: Map<Bytes<32>, Batch>;
+
+export ledger companies: Map<Bytes<32>, Bytes<32>>;
+export ledger companyNames: Map<Bytes<32>, Opaque<"string">>;
+
+export struct Claim {
+  company: Bytes<32>,
+  threshold: Uint<64>,
+  period: Opaque<"string">,
+  attested: Boolean,
+}
+export ledger claims: Map<Bytes<32>, Claim>;
+
+export ledger registryKey: Bytes<32>;
+export ledger auditorKey: Bytes<32>;
+
+export ledger issuedTonnes: Uint<64>;
+export ledger issuedCredits: Counter;
+export ledger retirementEvents: Counter;
+
+witness secretKey(): Bytes<32>;
+
+witness creditPath(commitment: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+
+witness tallyTonnes(): Uint<64>;
+
+constructor(registry: Bytes<32>, auditor: Bytes<32>) {
+  registryKey = disclose(registry);
+  auditorKey = disclose(auditor);
+}
+
+export circuit companyPublicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "canopy:company:"), sk]);
+}
+
+export circuit registryPublicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "canopy:registry:"), sk]);
+}
+
+export circuit auditorPublicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "canopy:auditor:"), sk]);
+}
+
+export circuit creditCommitment(
+  serial: Bytes<32>,
+  tonnes: Uint<64>,
+  owner: Bytes<32>,
+  salt: Bytes<32>
+): Bytes<32> {
+  return persistentHash<Vector<4, Bytes<32>>>([
+    serial,
+    tonnes as Field as Bytes<32>,
+    owner,
+    salt
+  ]);
+}
+
+export circuit retirementNullifier(serial: Bytes<32>, sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "canopy:retire:"), serial, sk]);
+}
+
+export circuit tallyCommitment(sk: Bytes<32>, tonnes: Uint<64>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "canopy:tally:"),
+    tonnes as Field as Bytes<32>,
+    tallyNonce(sk, tonnes)
+  ]);
+}
+
+export circuit tallyNonce(sk: Bytes<32>, tonnes: Uint<64>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "canopy:nonce:"),
+    sk,
+    tonnes as Field as Bytes<32>
+  ]);
+}
+
+export circuit openBatch(
+  batchId: Bytes<32>,
+  project: Opaque<"string">,
+  vintage: Uint<16>,
+  tonnes: Uint<64>,
+  credits: Uint<16>
+): [] {
+  assert(registryKey == registryPublicKey(secretKey()), "caller is not the registry");
+  assert(!batches.member(disclose(batchId)), "batch already open");
+  batches.insert(
+    disclose(batchId),
+    Batch {
+      project: disclose(project),
+      vintage: disclose(vintage),
+      tonnes: disclose(tonnes),
+      credits: disclose(credits),
+    }
+  );
+  issuedTonnes = (issuedTonnes + disclose(tonnes)) as Uint<64>;
+}
+
+export circuit issueCredit(batchId: Bytes<32>, commitment: Bytes<32>): [] {
+  assert(registryKey == registryPublicKey(secretKey()), "caller is not the registry");
+  assert(batches.member(disclose(batchId)), "no such batch");
+  creditTree.insert(disclose(commitment));
+  issuedCredits.increment(1);
+}
+
+export circuit registerCompany(name: Opaque<"string">): [] {
+  const sk = secretKey();
+  const me = companyPublicKey(sk);
+  assert(!companies.member(disclose(me)), "company already registered");
+  companies.insert(disclose(me), disclose(tallyCommitment(sk, 0)));
+  companyNames.insert(disclose(me), disclose(name));
+}
+
+export circuit retireCredit(serial: Bytes<32>, tonnes: Uint<64>, salt: Bytes<32>): [] {
+  const sk = secretKey();
+  const me = companyPublicKey(sk);
+  assert(companies.member(disclose(me)), "company is not registered");
+
+  const current = tallyTonnes();
+  assert(
+    companies.lookup(disclose(me)) == tallyCommitment(sk, current),
+    "tally does not match the committed one"
+  );
+
+  const commitment = creditCommitment(serial, tonnes, me, salt);
+  const path = creditPath(commitment);
+  assert(path.leaf == commitment, "the supplied path is not for this credit");
+  assert(
+    creditTree.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+    "credit was never issued by the registry"
+  );
+
+  const nullifier = disclose(retirementNullifier(serial, sk));
+  assert(!retiredCredits.member(nullifier), "credit has already been retired");
+  retiredCredits.insert(nullifier);
+
+  companies.insert(disclose(me), disclose(tallyCommitment(sk, (current + tonnes) as Uint<64>)));
+  retirementEvents.increment(1);
+}
+
+export circuit publishClaim(claimId: Bytes<32>, threshold: Uint<64>, period: Opaque<"string">): [] {
+  const sk = secretKey();
+  const me = companyPublicKey(sk);
+  assert(companies.member(disclose(me)), "company is not registered");
+  assert(!claims.member(disclose(claimId)), "claim already published");
+
+  const current = tallyTonnes();
+  assert(
+    companies.lookup(disclose(me)) == tallyCommitment(sk, current),
+    "tally does not match the committed one"
+  );
+  assert(current >= threshold, "claimed more than was actually retired");
+
+  claims.insert(
+    disclose(claimId),
+    Claim {
+      company: disclose(me),
+      threshold: disclose(threshold),
+      period: disclose(period),
+      attested: false,
+    }
+  );
+}
+
+export circuit attestClaim(claimId: Bytes<32>): [] {
+  assert(auditorKey == auditorPublicKey(secretKey()), "caller is not the accredited auditor");
+  assert(claims.member(disclose(claimId)), "no such claim");
+  const existing = claims.lookup(disclose(claimId));
+  claims.insert(
+    disclose(claimId),
+    Claim {
+      company: existing.company,
+      threshold: existing.threshold,
+      period: existing.period,
+      attested: true,
+    }
+  );
+}
