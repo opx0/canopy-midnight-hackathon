@@ -37,19 +37,19 @@ export default function Live({
     },
     {
       value: history?.medianMs ? seconds(history.medianMs) : "—",
-      label: "median prove and confirm",
-    },
-    {
-      value: chain ? Number(chain.issuedTonnes).toLocaleString() : "—",
-      label: "tonnes issued, publicly",
+      label: "median to prove and confirm",
     },
     {
       value: chain ? chain.retirementEvents.toLocaleString() : "—",
-      label: "retirements, tonnage hidden",
+      label: "retirements, tonnage never disclosed",
     },
     {
       value: history ? history.rejections.toLocaleString() : "—",
-      label: "fraud attempts refused",
+      label: "frauds the circuit refused to prove",
+    },
+    {
+      value: chain ? Number(chain.issuedTonnes).toLocaleString() : "—",
+      label: "tonnes issued, publicly auditable",
     },
   ];
 
@@ -77,6 +77,14 @@ export default function Live({
               <div className="live-label">{figure.label}</div>
             </div>
           ))}
+          <div className="live-figure live-foot">
+            <div className="live-label">
+              Credit tree is <code>HistoricMerkleTree&lt;10&gt;</code> — 1,024
+              credits per deployment. Each extra level costs one hash in the
+              proof and nothing on chain. The nullifier set and the tally map
+              grow with use; neither is scanned by any circuit.
+            </div>
+          </div>
         </div>
       ) : (
         <div className="scan">

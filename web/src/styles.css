@@ -826,3 +826,7 @@ a:hover {
   overflow-x: auto;
   text-align: left;
 }
+
+.live-figure.live-foot {
+  grid-column: 1 / -1;
+}
