@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ChainView, Disclosure, Meta, SessionView } from "../api.js";
 import { getDisclosure } from "../api.js";
 import { ActionFeedback, useAction } from "./Action.js";
-import { hash as short, tonnes } from "../format.js";
+import { hash as short, seeded, tonnes } from "../format.js";
 
 export const STEPS = [
   "The problem",
@@ -111,7 +111,7 @@ function Supply({ setStep, step, session, chain, meta, refresh }: Props) {
       <div className="row">
         <button
           className="btn"
-          disabled={action.busy}
+          disabled={action.busy || !seeded(session)}
           onClick={() => void action.run({ action: "issue", role: "ecocorp", tonnes: 400 })}
         >
           Issue a 400 t credit to EcoCorp
@@ -192,7 +192,7 @@ function Retirement({ setStep, step, session, refresh }: Props) {
             ) : (
               <button
                 className="btn small ghost"
-                disabled={action.busy}
+                disabled={action.busy || !seeded(session)}
                 onClick={() =>
                   void action.run({
                     action: "retire",
@@ -293,7 +293,7 @@ function Claim({ setStep, step, session, refresh }: Props) {
 
       <button
         className="btn"
-        disabled={action.busy}
+        disabled={action.busy || !seeded(session)}
         onClick={() =>
           void action.run({
             action: "claim",
@@ -375,7 +375,7 @@ function Cheating({ setStep, step, session, refresh }: Props) {
         </p>
         <button
           className="btn danger"
-          disabled={overclaim.busy}
+          disabled={overclaim.busy || !seeded(session)}
           onClick={() =>
             void overclaim.run({
               action: "claim",
@@ -478,7 +478,7 @@ function Auditor({ setStep, step, session, chain, refresh }: Props) {
 
       <button
         className="btn"
-        disabled={action.busy || !claim}
+        disabled={action.busy || !seeded(session) || !claim}
         onClick={() => void action.run({ action: "attest", claimId: claim?.id })}
       >
         {claim ? "Attest the claim as the auditor" : "No claim to attest"}

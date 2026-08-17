@@ -3,3 +3,6 @@ export const hash = (value: string) =>
 
 export const tonnes = (value: string | number) =>
   Number(value).toLocaleString();
+
+export const seeded = (session?: { seeding: { done: number; total: number } }) =>
+  !!session && session.seeding.done >= session.seeding.total;

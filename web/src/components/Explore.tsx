@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ChainView, Disclosure, Meta, SessionView } from "../api.js";
 import { getDisclosure } from "../api.js";
 import { ActionFeedback, useAction } from "./Action.js";
-import { hash as short, tonnes } from "../format.js";
+import { hash as short, seeded, tonnes } from "../format.js";
 
 type Props = {
   session?: SessionView;
@@ -111,7 +111,7 @@ function RegistryPanel({ session, chain, meta, refresh }: Props) {
         </div>
         <button
           className="btn"
-          disabled={action.busy}
+          disabled={action.busy || !seeded(session)}
           onClick={() =>
             void action.run({ action: "issue", role: target, tonnes: size })
           }
@@ -180,7 +180,7 @@ function CompanyPanel({
                 ) : (
                   <button
                     className="btn small ghost"
-                    disabled={retire.busy}
+                    disabled={retire.busy || !seeded(session)}
                     onClick={() =>
                       void retire.run({
                         action: "retire",
@@ -217,7 +217,7 @@ function CompanyPanel({
           </p>
           <button
             className="btn danger"
-            disabled={retire.busy}
+            disabled={retire.busy || !seeded(session)}
             onClick={() =>
               void retire.run({
                 action: "retire",
@@ -249,7 +249,7 @@ function CompanyPanel({
         </div>
         <button
           className="btn"
-          disabled={claim.busy}
+          disabled={claim.busy || !seeded(session)}
           onClick={() =>
             void claim.run({
               action: "claim",
@@ -373,7 +373,7 @@ function AuditorPanel({ session, chain, refresh }: Props) {
                 ) : (
                   <button
                     className="btn small ghost"
-                    disabled={action.busy}
+                    disabled={action.busy || !seeded(session)}
                     onClick={() =>
                       void action.run({ action: "attest", claimId: claim.id })
                     }
