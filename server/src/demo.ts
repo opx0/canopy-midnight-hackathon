@@ -1,6 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { pureCircuits, type CreditNote } from "@canopy/contract";
-import { enqueue, handleFor, logger, publicLedger, rootCause } from "./chain.js";
+import {
+  enqueue,
+  handleFor,
+  logger,
+  publicLedger,
+  rootCause,
+  settle,
+} from "./chain.js";
 import { recordAction } from "./history.js";
 import {
   auditorSecretKey,
@@ -61,7 +68,9 @@ const STALE_STATE = /Invalid Transaction|submission|1010|timed ?out|Custom error
 const submitOnce = async <T>(work: () => Promise<T>): Promise<T> => {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await enqueue(work);
+      const result = await enqueue(work);
+      await settle();
+      return result;
     } catch (error) {
       const reason = rootCause(error);
       if (attempt >= 4 || !STALE_STATE.test(reason)) throw error;
@@ -69,7 +78,8 @@ const submitOnce = async <T>(work: () => Promise<T>): Promise<T> => {
         { attempt, reason },
         "the node rejected the transaction, waiting for the wallet to catch up with its own spends",
       );
-      await new Promise((resolve) => setTimeout(resolve, 20_000));
+      await settle();
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
     }
   }
 };

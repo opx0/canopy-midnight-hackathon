@@ -1,4 +1,6 @@
+import * as Rx from "rxjs";
 import { WebSocket } from "ws";
+import { PendingTransactions } from "@midnight-ntwrk/wallet-sdk-capabilities";
 import {
   initializeMidnightProviders,
   type ContractConfiguration,
@@ -55,6 +57,7 @@ type Providers = ReturnType<
 let providers: Providers;
 let contractAddress: string;
 let reader: ReturnType<typeof indexerPublicDataProvider>;
+let walletFacade: { state(): Rx.Observable<{ pending: unknown }> } | undefined;
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -96,6 +99,7 @@ export const bootstrap = async ({
   logger.info({ network: networkName }, "starting Canopy backend");
 
   const walletProvider = await buildWallet(logger);
+  walletFacade = walletProvider.wallet;
   await walletProvider.start(false);
 
   await fund(
@@ -205,6 +209,27 @@ const deployOnce = async (): Promise<string> => {
   await writeFile(deploymentFile, `${JSON.stringify(record, null, 2)}\n`);
   logger.info({ contractAddress: address }, "contract deployed");
   return address;
+};
+
+export const settle = async (timeoutMs = 180_000): Promise<void> => {
+  if (!walletFacade) return;
+  const clear = (state: { pending: unknown }) => {
+    try {
+      return (
+        PendingTransactions.allPending(
+          state.pending as Parameters<typeof PendingTransactions.allPending>[0],
+        ).length === 0
+      );
+    } catch {
+      return true;
+    }
+  };
+  await Rx.firstValueFrom(
+    walletFacade.state().pipe(
+      Rx.filter(clear),
+      Rx.timeout({ each: timeoutMs, with: () => Rx.of(undefined) }),
+    ),
+  );
 };
 
 export const handleFor = async (
