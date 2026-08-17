@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { rootCause } from "./chain.js";
+import { recordAction } from "./history.js";
 
 export type Job = {
   readonly id: string;
@@ -27,11 +28,18 @@ export const start = (action: string, work: () => Promise<unknown>): Job => {
       job.status = "done";
       job.result = result;
       job.finishedAt = Date.now();
+      void recordAction(action, job.finishedAt - job.startedAt, result);
     },
     (error: unknown) => {
       job.status = "failed";
       job.error = rootCause(error);
       job.finishedAt = Date.now();
+      void recordAction(
+        action,
+        job.finishedAt - job.startedAt,
+        undefined,
+        job.error,
+      );
     },
   );
 

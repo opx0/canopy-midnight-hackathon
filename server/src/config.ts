@@ -59,6 +59,12 @@ export const walletStateFile = path.join(
   `wallet-state.${networkName}.json`,
 );
 
+export const historyFile = path.join(
+  root,
+  "server",
+  `history.${networkName}.jsonl`,
+);
+
 export const environment: EnvironmentConfiguration = {
   ...(networks[networkName] ?? networks.preprod),
   proofServer,

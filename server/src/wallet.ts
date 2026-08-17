@@ -23,7 +23,7 @@ const configuration = (): WalletConfiguration =>
     }
   ).config;
 
-const dustConfiguration = (config: WalletConfiguration) => ({
+export const dustConfiguration = (config = configuration()) => ({
   ...config,
   costParameters: {
     ledgerParams: DEFAULT_DUST_OPTIONS.ledgerParams,

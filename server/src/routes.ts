@@ -19,6 +19,7 @@ import {
   type Session,
 } from "./demo.js";
 import { getJob, start } from "./jobs.js";
+import { historyView } from "./history.js";
 import type { CompanyRole } from "./identities.js";
 
 const router: Router = Router();
@@ -57,6 +58,10 @@ router.get("/session/:id", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.get("/history", (_req, res) => {
+  res.json(historyView());
 });
 
 router.get("/chain", async (_req, res, next) => {

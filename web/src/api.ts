@@ -88,11 +88,33 @@ const json = async <T>(response: Response): Promise<T> => {
 
 export type Status = {
   ready: boolean;
+  reads: boolean;
   failure?: string;
   warmingUpSeconds: number;
 };
 
+export type History = {
+  since?: number;
+  transactions: number;
+  rejections: number;
+  medianMs: number;
+  snapshots: {
+    at: number;
+    issuedTonnes?: string;
+    issuedCredits?: number;
+    retirementEvents?: number;
+  }[];
+  recent: {
+    at: number;
+    action?: string;
+    txHash?: string;
+    ms?: number;
+    rejected?: string;
+  }[];
+};
+
 export const getStatus = () => fetch("/api/status").then(json<Status>);
+export const getHistory = () => fetch("/api/history").then(json<History>);
 export const getMeta = () => fetch("/api/meta").then(json<Meta>);
 export const getChain = () => fetch("/api/chain").then(json<ChainView>);
 export const getSession = (id: string) =>

@@ -1,13 +1,24 @@
 import { useEffect, useRef } from "react";
-import type { ChainView, Meta } from "../api.js";
+import type { ChainView, History, Meta } from "../api.js";
 import { hash as short } from "../format.js";
+
+const ACTIONS: Record<string, string> = {
+  "open-batch": "Registry opened a batch",
+  issue: "Registry issued a credit",
+  register: "Company registered",
+  retire: "Credit retired",
+  claim: "Claim published",
+  attest: "Auditor attested",
+};
 
 export default function ChainInspector({
   chain,
   meta,
+  history,
 }: {
   chain?: ChainView;
   meta?: Meta;
+  history?: History;
 }) {
   const seen = useRef(new Set<string>());
   const fresh = useRef(new Set<string>());
@@ -139,6 +150,37 @@ export default function ChainInspector({
         ) : (
           <div className="empty">No batches opened yet.</div>
         )}
+      </div>
+
+      <div className="section">
+        <h3>Recent transactions</h3>
+        {history?.recent.length ? (
+          history.recent.map((entry) => (
+            <div
+              key={`${entry.at}${entry.txHash ?? entry.rejected ?? ""}`}
+              className="list-row"
+              style={{ padding: "8px 0" }}
+            >
+              <div className="grow">
+                <div style={{ fontSize: 13 }}>
+                  {ACTIONS[entry.action ?? ""] ?? entry.action}
+                </div>
+                <div className="hash" style={{ marginTop: 4, marginBottom: 0 }}>
+                  {entry.txHash ? short(entry.txHash) : "never submitted"}
+                </div>
+              </div>
+              <span className={`tag ${entry.rejected ? "held" : "attested"}`}>
+                {entry.rejected ? "refused" : `${((entry.ms ?? 0) / 1000).toFixed(1)}s`}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="empty">No transactions recorded yet.</div>
+        )}
+        <div className="inspector-sub" style={{ marginTop: 8 }}>
+          Every action on this site is a real transaction. Refused ones never
+          reach the chain — the circuit rejects them while proving.
+        </div>
       </div>
 
       {meta && (

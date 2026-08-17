@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createSession,
   getChain,
+  getHistory,
   getMeta,
   getSession,
   getStatus,
   type ChainView,
+  type History,
   type Meta,
   type SessionView,
   type Status,
 } from "./api.js";
+import Live from "./components/Live.js";
 import ChainInspector from "./components/ChainInspector.js";
 import Tour, { STEPS } from "./components/Tour.js";
 import Explore from "./components/Explore.js";
@@ -27,6 +30,7 @@ export default function App() {
   const [tab, setTab] = useState<"tour" | "explore" | "how">("tour");
   const [fatal, setFatal] = useState<string>();
   const [status, setStatus] = useState<Status>();
+  const [history, setHistory] = useState<History>();
 
   const started = useRef(false);
   useEffect(() => {
@@ -51,11 +55,10 @@ export default function App() {
       for (;;) {
         const current = await getStatus().catch(() => undefined);
         setStatus(current);
-        if (current?.failure) throw new Error(current.failure);
+        getMeta().then(setMeta).catch(() => undefined);
         if (current?.ready) break;
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-      setMeta(await getMeta());
       setSessionId(await resumeOrCreate());
     };
 
@@ -64,6 +67,7 @@ export default function App() {
 
   const refresh = useCallback(() => {
     getChain().then(setChain).catch(() => undefined);
+    getHistory().then(setHistory).catch(() => undefined);
     if (sessionId) getSession(sessionId).then(setSession).catch(() => undefined);
   }, [sessionId]);
 
@@ -96,6 +100,8 @@ export default function App() {
             Carbon claims you can verify. Books you cannot read.
           </div>
         </header>
+
+        <Live history={history} chain={chain} meta={meta} status={status} />
 
         <nav className="tabs">
           <button
@@ -144,14 +150,9 @@ export default function App() {
             <span className="spinner" />
             <span>
               {status && !status.ready
-                ? "Canopy is scanning the chain for the DUST that pays transaction fees. This happens once per restart and takes a few hours — the How it works tab needs nothing from the chain."
+                ? "The fee wallet is arming, so writing to the chain is paused for a moment. Everything to the right is the live contract, read straight from the indexer, and How it works explains the cryptography."
                 : `Preparing a private sandbox on Midnight ${meta?.network ?? "testnet"}…`}
             </span>
-            {status && !status.ready && (
-              <span className="elapsed">
-                {Math.round(status.warmingUpSeconds / 60)}m
-              </span>
-            )}
           </div>
         )}
 
@@ -176,7 +177,7 @@ export default function App() {
           ))}
       </main>
 
-      <ChainInspector chain={chain} meta={meta} />
+      <ChainInspector chain={chain} meta={meta} history={history} />
     </div>
   );
 }

@@ -690,3 +690,58 @@ a:hover {
   color: var(--text-faint);
   font-size: 13.5px;
 }
+
+.live-strip {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+
+.live-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.live-where {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.live-address {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+.live-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.live-figure {
+  background: var(--bg-raised);
+  padding: 12px 14px;
+}
+
+.live-value {
+  font-size: 22px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.live-label {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 3px;
+  line-height: 1.35;
+}

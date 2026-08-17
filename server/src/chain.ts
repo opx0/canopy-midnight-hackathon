@@ -10,6 +10,7 @@ import {
   deployContract,
   findDeployedContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
+import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { pino } from "pino";
 
@@ -52,6 +53,7 @@ type Providers = ReturnType<
 
 let providers: Providers;
 let contractAddress: string;
+let reader: ReturnType<typeof indexerPublicDataProvider>;
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -73,10 +75,23 @@ const readDeployedAddress = async (): Promise<string | undefined> => {
   }
 };
 
+export const connect = async (): Promise<boolean> => {
+  setNetworkId(environment.walletNetworkId);
+  reader = indexerPublicDataProvider(environment.indexer, environment.indexerWS);
+  const existing = await readDeployedAddress();
+  if (existing) contractAddress = existing;
+  logger.info(
+    { network: networkName, contractAddress: existing },
+    existing
+      ? "reading the deployed contract; no wallet needed for this"
+      : "no deployment recorded yet, so there is nothing to read",
+  );
+  return existing !== undefined;
+};
+
 export const bootstrap = async ({
   deployIfMissing = false,
 }: { deployIfMissing?: boolean } = {}): Promise<{ contractAddress: string }> => {
-  setNetworkId(environment.walletNetworkId);
   logger.info({ network: networkName }, "starting Canopy backend");
 
   const walletProvider = await buildWallet(logger);
@@ -113,9 +128,7 @@ export const bootstrap = async ({
     contractConfiguration,
   );
 
-  const existing = await readDeployedAddress();
-  if (existing) {
-    contractAddress = existing;
+  if (contractAddress) {
     logger.info({ contractAddress }, "using existing deployment");
   } else if (deployIfMissing) {
     contractAddress = await deploy();
@@ -207,9 +220,8 @@ export const handleFor = async (
 };
 
 export const publicLedger = async () => {
-  const state = await providers.publicDataProvider.queryContractState(
-    contractAddress,
-  );
+  if (!contractAddress) throw new Error("no contract is deployed yet");
+  const state = await reader.queryContractState(contractAddress);
   if (state === null) {
     throw new Error("contract state unavailable");
   }

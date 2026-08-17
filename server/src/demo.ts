@@ -328,5 +328,28 @@ export const seedSession = async (session: Session): Promise<void> => {
   }
 };
 
+export const seedShowcase = async (): Promise<void> => {
+  const ledger = await publicLedger();
+  if (Number(ledger.retirementEvents) > 0) return;
+  logger.info("seeding the showcase so a first visitor lands on a live chain");
+  try {
+    const session = createSession();
+    await seedSession(session);
+    if (session.seeding.failed) throw new Error(session.seeding.failed);
+    const [credit] = session.companies.ecocorp.credits;
+    await retireCredit(session, "ecocorp", hex(credit.serial));
+    const claim = await publishClaim(
+      session,
+      "ecocorp",
+      credit.tonnes - 100n,
+      "FY2026 Q3",
+    );
+    await attestClaim(session, claim.claimId);
+    logger.info("showcase seeded");
+  } catch (error) {
+    logger.error({ error }, "could not seed the showcase");
+  }
+};
+
 export const allocation = ALLOCATION;
 export const project = PROJECT;
