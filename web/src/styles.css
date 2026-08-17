@@ -818,3 +818,11 @@ a:hover {
 .verify:hover {
   border-bottom-color: var(--leaf);
 }
+
+.code-block.source {
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-x: auto;
+  text-align: left;
+}

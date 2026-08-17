@@ -69,6 +69,59 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
         </p>
       </div>
 
+      <h2 style={{ marginTop: 32 }}>The contract, as written</h2>
+      <p>
+        The whole protocol is about 200 lines of Compact. This is the public
+        ledger — everything a validator stores and anyone can read:
+      </p>
+      <pre className="code-block source">{`export ledger creditTree: HistoricMerkleTree<10, Bytes<32>>;
+export ledger retiredCredits: Set<Bytes<32>>;
+export ledger batches: Map<Bytes<32>, Batch>;
+export ledger companies: Map<Bytes<32>, Bytes<32>>;
+export ledger claims: Map<Bytes<32>, Claim>;
+export ledger registryKey: Bytes<32>;
+export ledger auditorKey: Bytes<32>;
+export ledger issuedTonnes: Uint<64>;
+export ledger issuedCredits: Counter;
+export ledger retirementEvents: Counter;`}</pre>
+      <p>
+        No tonnage per company, no serial, no owner. And this is everything the
+        prover supplies privately — inputs to the proof, never to the chain:
+      </p>
+      <pre className="code-block source">{`witness secretKey(): Bytes<32>;
+witness creditPath(commitment: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+witness tallyTonnes(): Uint<64>;`}</pre>
+
+      <h2 style={{ marginTop: 32 }}>Where the soundness actually lives</h2>
+      <p>
+        Witnesses are supplied by the prover, so a circuit is only as sound as
+        the constraints it puts on what comes <em>back</em> from one. This is{" "}
+        <code>retireCredit</code>, unedited:
+      </p>
+      <pre className="code-block source">{`const commitment = creditCommitment(serial, tonnes, me, salt);
+const path = creditPath(commitment);
+assert(path.leaf == commitment, "the supplied path is not for this credit");
+assert(
+  creditTree.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+  "credit was never issued by the registry"
+);`}</pre>
+      <div className="note bad">
+        <strong>The third line is the one that matters.</strong> Without it a
+        dishonest prover returns any valid path from{" "}
+        <code>creditPath</code> — one authenticating somebody else's credit —
+        and the root check still passes, minting tonnage from nothing. An
+        adversarial review of this contract found exactly that, and the
+        exploit is in the test suite: a deliberately lying{" "}
+        <code>creditPath</code> witness that the circuit now rejects. Testing
+        fraud through the honest witness proves nothing about the circuit.
+      </div>
+      <div className="note">
+        <strong>Ordering is load-bearing too.</strong>{" "}
+        <code>tallyTonnes()</code> is read <em>before</em>{" "}
+        <code>retiredCredits.insert(nullifier)</code>. Reversed, the
+        chain-derived tally counts the credit being retired twice.
+      </div>
+
       <h2 style={{ marginTop: 32 }}>What Compact enforces</h2>
       <p>
         Compact tracks every value derived from private data and{" "}
