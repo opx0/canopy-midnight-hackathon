@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rootCause } from "./chain.js";
 
 export type Job = {
   readonly id: string;
@@ -29,7 +30,7 @@ export const start = (action: string, work: () => Promise<unknown>): Job => {
     },
     (error: unknown) => {
       job.status = "failed";
-      job.error = error instanceof Error ? error.message : String(error);
+      job.error = rootCause(error);
       job.finishedAt = Date.now();
     },
   );

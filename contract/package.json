@@ -19,7 +19,7 @@
     "lint": "eslint src",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "compact:fast": "compact compile --skip-zk src/canopy.compact ./src/managed/canopy"
+    "compact:check": "compact compile --skip-zk src/canopy.compact $(mktemp -d)/canopy"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

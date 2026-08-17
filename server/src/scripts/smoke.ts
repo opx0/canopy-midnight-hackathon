@@ -1,4 +1,4 @@
-import { bootstrap, logger } from "../chain.js";
+import { bootstrap, logger, rootCause } from "../chain.js";
 import {
   attestClaim,
   chainView,
@@ -28,7 +28,7 @@ const mustFail = async (
     await work();
     throw new Error(`SECURITY FAILURE: ${label} was accepted`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = rootCause(error);
     if (message.startsWith("SECURITY FAILURE")) throw error;
     if (!expected.test(message)) {
       throw new Error(

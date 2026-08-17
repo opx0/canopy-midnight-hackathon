@@ -31,6 +31,15 @@ const networks: Record<string, Omit<EnvironmentConfiguration, "proofServer">> = 
     nodeWS: "wss://rpc.preview.midnight.network",
     faucet: "https://midnight-tmnight-preview.nethermind.dev/",
   } as Omit<EnvironmentConfiguration, "proofServer">,
+  local: {
+    walletNetworkId: "undeployed",
+    networkId: "undeployed",
+    indexer: "http://127.0.0.1:8088/api/v4/graphql",
+    indexerWS: "ws://127.0.0.1:8088/api/v4/graphql/ws",
+    node: "http://127.0.0.1:9944",
+    nodeWS: "ws://127.0.0.1:9944",
+    faucet: "",
+  } as Omit<EnvironmentConfiguration, "proofServer">,
   preprod: {
     walletNetworkId: "preprod",
     networkId: "preprod",

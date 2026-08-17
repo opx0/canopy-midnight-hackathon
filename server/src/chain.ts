@@ -10,7 +10,7 @@ import {
   deployContract,
   findDeployedContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { pino } from "pino";
 
 import {
@@ -92,8 +92,14 @@ export const bootstrap = async ({
     walletProvider.unshieldedKeystore as Parameters<typeof fund>[2],
   );
 
+  await access(`${zkConfigPath}/keys`).catch(() => {
+    throw new Error(
+      `No proving keys in ${zkConfigPath}/keys. Run 'npm run compact --workspace @canopy/contract'. Compiling with --skip-zk deletes them, and the contract tests still pass without them.`,
+    );
+  });
+
   const contractConfiguration: ContractConfiguration = {
-    privateStateStoreName: "canopy-private-state",
+    privateStateStoreName: `canopy-private-state-${networkName}`,
     zkConfigPath,
   };
   providers = initializeMidnightProviders<CanopyCircuit, CanopyPrivateState>(
@@ -119,10 +125,6 @@ export const bootstrap = async ({
 
 const deploy = async (): Promise<string> => {
   logger.info("deploying Canopy contract");
-  await providers.privateStateProvider.set("canopy-deployer", {
-    secretKey: registrySecretKey,
-    credits: [],
-  });
   const deployed = await deployContract(providers, {
     compiledContract: CanopyCompiledContract,
     privateStateId: "canopy-deployer",
@@ -147,6 +149,7 @@ export const handleFor = async (
   credits: readonly CreditNote[],
 ) => {
   const state: CanopyPrivateState = { secretKey, credits };
+  providers.privateStateProvider.setContractAddress(contractAddress);
   await providers.privateStateProvider.set(privateStateId, state);
   return findDeployedContract(providers, {
     contractAddress,
@@ -165,6 +168,22 @@ export const publicLedger = async () => {
   }
   const { ledger } = await import("@canopy/contract");
   return ledger(state.data);
+};
+
+export const rootCause = (error: unknown): string => {
+  let deepest = error instanceof Error ? error.message : String(error);
+  let current: unknown = error;
+  while (current instanceof Error && current.cause !== undefined) {
+    current = current.cause;
+    if (current instanceof Error && current.message) deepest = current.message;
+    else if (typeof current === "object" && current !== null) {
+      const { message, stack } = current as { message?: string; stack?: string };
+      if (typeof message === "string" && message) deepest = message;
+      else if (typeof stack === "string")
+        deepest = stack.split("\n")[0].replace(/^Error:\s*/, "");
+    }
+  }
+  return deepest;
 };
 
 export const getContractAddress = () => contractAddress;
