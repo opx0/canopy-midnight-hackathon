@@ -6,6 +6,7 @@ import { port, root } from "./config.js";
 import routes from "./routes.js";
 import { pruneSessions, seedShowcase } from "./demo.js";
 import { keepSnapshotting, load } from "./history.js";
+import { scan } from "./funding.js";
 import { pruneJobs } from "./jobs.js";
 
 const warmUp = {
@@ -25,6 +26,7 @@ app.get("/api/status", (_req, res) => {
     reads: warmUp.reads,
     failure: warmUp.failure,
     warmingUpSeconds: Math.round((Date.now() - warmUp.since) / 1000),
+    scan,
   });
 });
 

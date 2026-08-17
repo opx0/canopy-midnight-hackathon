@@ -13,6 +13,15 @@ type Keystore = {
   signData(payload: Uint8Array): string;
 };
 
+const ESTIMATED_DEPTH = 1_450_000;
+
+export const scan = {
+  applied: 0,
+  perSecond: 0,
+  estimatedTotal: ESTIMATED_DEPTH,
+  secondsLeft: 0,
+};
+
 const night = (state: FacadeState): bigint =>
   state.unshielded.balances[unshieldedToken().raw] ?? 0n;
 
@@ -84,6 +93,17 @@ export const fund = async (
         Rx.throttleTime(10_000, undefined, { leading: true, trailing: true }),
         Rx.tap((current: FacadeState) => {
           const p = current.dust.state.progress;
+          const elapsed = Math.max(1, (Date.now() - startedScanAt) / 1000);
+          scan.applied = Number(p.appliedIndex);
+          scan.perSecond = Math.round(scan.applied / elapsed);
+          scan.estimatedTotal = Math.max(
+            ESTIMATED_DEPTH,
+            Number(p.highestIndex),
+            scan.applied,
+          );
+          scan.secondsLeft = scan.perSecond
+            ? Math.round((scan.estimatedTotal - scan.applied) / scan.perSecond)
+            : 0;
           logger.info(
             {
               seconds: Math.round((Date.now() - startedScanAt) / 1000),

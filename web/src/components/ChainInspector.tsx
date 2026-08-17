@@ -183,13 +183,14 @@ export default function ChainInspector({
         </div>
       </div>
 
-      {meta && (
+      {meta?.contractAddress && (
         <div className="section" style={{ marginBottom: 0 }}>
           <h3>Deployment</h3>
-          <div style={{ fontSize: 12.5, color: "var(--text-faint)" }}>
-            Midnight {meta.network}
+          <div className="inspector-sub" style={{ marginBottom: 6 }}>
+            Midnight {meta.network} — the contract address anyone can check
+            against the public chain.
           </div>
-          <div className="hash" style={{ marginTop: 6 }}>
+          <div className="hash" style={{ whiteSpace: "normal" }}>
             {meta.contractAddress}
           </div>
         </div>

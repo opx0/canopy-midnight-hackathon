@@ -91,6 +91,12 @@ export type Status = {
   reads: boolean;
   failure?: string;
   warmingUpSeconds: number;
+  scan?: {
+    applied: number;
+    perSecond: number;
+    estimatedTotal: number;
+    secondsLeft: number;
+  };
 };
 
 export type History = {
