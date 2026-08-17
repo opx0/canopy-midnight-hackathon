@@ -1,5 +1,5 @@
 {
-  "network": "local",
-  "contractAddress": "dca97de37cbdff24b23b238254f3d87f592e7ef1c21d53f4b589f7f1799d9ab6",
-  "deployedAt": "2026-08-17T02:23:51.134Z"
+  "network": "preprod",
+  "contractAddress": "85aa0f8839a9771906dbab16612024a56b070b2679088e61442cb1bfd8eda709",
+  "deployedAt": "2026-08-17T14:05:02.706Z"
 }

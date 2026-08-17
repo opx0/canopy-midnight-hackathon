@@ -193,14 +193,10 @@ export default function ChainInspector({
           <div className="hash" style={{ whiteSpace: "normal" }}>
             {meta.contractAddress}
           </div>
-          <a
-            className="verify"
-            href={`https://preprod.nightforge.jp/contract/${meta.contractAddress}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open it in an independent explorer ↗
-          </a>
+          <div className="inspector-sub" style={{ marginTop: 8, marginBottom: 0 }}>
+            Every figure above is read from this address through Midnight's
+            public indexer, not from anything this server stores.
+          </div>
         </div>
       )}
     </aside>
