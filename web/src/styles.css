@@ -808,3 +808,16 @@ a:hover {
   line-height: 1.55;
   max-width: 74ch;
 }
+
+.verify {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--leaf);
+  text-decoration: none;
+  border-bottom: 1px solid var(--leaf-dim);
+}
+
+.verify:hover {
+  border-bottom-color: var(--leaf);
+}
