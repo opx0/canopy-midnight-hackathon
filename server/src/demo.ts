@@ -14,6 +14,7 @@ import {
   auditorSecretKey,
   companyLabel,
   companySecretKey,
+  derive,
   registrySecretKey,
   type CompanyRole,
 } from "./identities.js";
@@ -62,7 +63,7 @@ const makeCompany = (sessionId: string, role: CompanyRole): CompanyState => {
   };
 };
 
-const sharedBatchId = bytes();
+const sharedBatchId = derive("showcase", "batch");
 
 const STALE_STATE = /Invalid Transaction|submission|1010|timed ?out|Custom error/i;
 
