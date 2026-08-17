@@ -86,6 +86,13 @@ const json = async <T>(response: Response): Promise<T> => {
   return (await response.json()) as T;
 };
 
+export type Status = {
+  ready: boolean;
+  failure?: string;
+  warmingUpSeconds: number;
+};
+
+export const getStatus = () => fetch("/api/status").then(json<Status>);
 export const getMeta = () => fetch("/api/meta").then(json<Meta>);
 export const getChain = () => fetch("/api/chain").then(json<ChainView>);
 export const getSession = (id: string) =>

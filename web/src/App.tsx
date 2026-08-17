@@ -4,9 +4,11 @@ import {
   getChain,
   getMeta,
   getSession,
+  getStatus,
   type ChainView,
   type Meta,
   type SessionView,
+  type Status,
 } from "./api.js";
 import ChainInspector from "./components/ChainInspector.js";
 import Tour, { STEPS } from "./components/Tour.js";
@@ -24,27 +26,40 @@ export default function App() {
   const [step, setStep] = useState(0);
   const [tab, setTab] = useState<"tour" | "explore" | "how">("tour");
   const [fatal, setFatal] = useState<string>();
+  const [status, setStatus] = useState<Status>();
 
   const started = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    getMeta().then(setMeta).catch((error: Error) => setFatal(error.message));
 
-    const saved = localStorage.getItem(SESSION_KEY);
-    const resume = saved
-      ? getSession(saved).then(() => saved)
-      : Promise.reject(new Error("no saved session"));
+    const resumeOrCreate = async (): Promise<string> => {
+      const saved = localStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const found = await getSession(saved).then(
+          () => saved,
+          () => undefined,
+        );
+        if (found) return found;
+      }
+      const { id } = await createSession();
+      localStorage.setItem(SESSION_KEY, id);
+      return id;
+    };
 
-    resume
-      .catch(() =>
-        createSession().then(({ id }) => {
-          localStorage.setItem(SESSION_KEY, id);
-          return id;
-        }),
-      )
-      .then(setSessionId)
-      .catch((error: Error) => setFatal(error.message));
+    const run = async () => {
+      for (;;) {
+        const current = await getStatus().catch(() => undefined);
+        setStatus(current);
+        if (current?.failure) throw new Error(current.failure);
+        if (current?.ready) break;
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      setMeta(await getMeta());
+      setSessionId(await resumeOrCreate());
+    };
+
+    run().catch((error: Error) => setFatal(error.message));
   }, []);
 
   const refresh = useCallback(() => {
@@ -128,8 +143,15 @@ export default function App() {
           <div className="working">
             <span className="spinner" />
             <span>
-              Preparing a private sandbox on Midnight {meta?.network ?? "testnet"}…
+              {status && !status.ready
+                ? "Canopy is scanning the chain for the DUST that pays transaction fees. This happens once per restart and takes a few hours — the How it works tab needs nothing from the chain."
+                : `Preparing a private sandbox on Midnight ${meta?.network ?? "testnet"}…`}
             </span>
+            {status && !status.ready && (
+              <span className="elapsed">
+                {Math.round(status.warmingUpSeconds / 60)}m
+              </span>
+            )}
           </div>
         )}
 
