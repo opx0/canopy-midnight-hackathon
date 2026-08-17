@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { pureCircuits, type CreditNote } from "@canopy/contract";
-import { enqueue, handleFor, logger, publicLedger } from "./chain.js";
+import { enqueue, handleFor, logger, publicLedger, rootCause } from "./chain.js";
+import { recordAction } from "./history.js";
 import {
   auditorSecretKey,
   companyLabel,
@@ -55,6 +56,23 @@ const makeCompany = (sessionId: string, role: CompanyRole): CompanyState => {
 
 const sharedBatchId = bytes();
 
+const submit = async <T>(action: string, work: () => Promise<T>): Promise<T> => {
+  const startedAt = Date.now();
+  try {
+    const result = await enqueue(work);
+    void recordAction(action, Date.now() - startedAt, result);
+    return result;
+  } catch (error) {
+    void recordAction(
+      action,
+      Date.now() - startedAt,
+      undefined,
+      rootCause(error),
+    );
+    throw error;
+  }
+};
+
 export const createSession = (): Session => {
   const id = randomUUID().slice(0, 8);
   const session: Session = {
@@ -99,7 +117,7 @@ const companyHandle = (session: Session, role: CompanyRole) => {
 };
 
 export const openBatch = (session: Session) =>
-  enqueue(async () => {
+  submit("open-batch", async () => {
     const contract = await registryHandle(session);
     const tx = await contract.callTx.openBatch(
       session.batchId,
@@ -116,7 +134,7 @@ export const issueCredit = (
   role: CompanyRole,
   tonnes: bigint,
 ) =>
-  enqueue(async () => {
+  submit("issue", async () => {
     const company = session.companies[role];
     const note: CreditNote = {
       serial: bytes(),
@@ -142,7 +160,7 @@ export const issueCredit = (
   });
 
 export const registerCompany = (session: Session, role: CompanyRole) =>
-  enqueue(async () => {
+  submit("register", async () => {
     const company = session.companies[role];
     const contract = await companyHandle(session, role);
     const tx = await contract.callTx.registerCompany(company.name);
@@ -154,7 +172,7 @@ export const retireCredit = (
   role: CompanyRole,
   serialHex: string,
 ) =>
-  enqueue(async () => {
+  submit("retire", async () => {
     const company = session.companies[role];
     const note = Object.values(session.companies)
       .flatMap((entry) => entry.credits)
@@ -181,7 +199,7 @@ export const publishClaim = (
   threshold: bigint,
   period: string,
 ) =>
-  enqueue(async () => {
+  submit("claim", async () => {
     const claimId = bytes();
     const contract = await companyHandle(session, role);
     const tx = await contract.callTx.publishClaim(claimId, threshold, period);
@@ -220,7 +238,7 @@ export const disclosureFor = async (session: Session, role: CompanyRole) => {
 };
 
 export const attestClaim = (session: Session, claimIdHex: string) =>
-  enqueue(async () => {
+  submit("attest", async () => {
     const contract = await auditorHandle(session);
     const tx = await contract.callTx.attestClaim(
       Uint8Array.from(Buffer.from(claimIdHex, "hex")),
