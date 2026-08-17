@@ -197,7 +197,7 @@ to the backend on port 3001.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CANOPY_NETWORK` | `preview` | `preview` or `preprod`. The public demo runs on `preprod`, because the Preview faucet was down (`NOT_SERVING / SYNC_STUCK_RECOVERY`) while this was built. |
+| `CANOPY_NETWORK` | `preprod` | `preview` or `preprod`. Defaults to PreProd because the Preview faucet was returning `NOT_SERVING / SYNC_STUCK_RECOVERY` throughout this build. |
 | `CANOPY_PROOF_SERVER` | `http://127.0.0.1:6300` | Proof server URL |
 | `CANOPY_SEED` | a development seed | Master seed for the fee wallet and role keys |
 | `PORT` | `3001` | Backend port |

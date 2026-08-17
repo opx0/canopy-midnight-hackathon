@@ -42,10 +42,10 @@ const networks: Record<string, Omit<EnvironmentConfiguration, "proofServer">> = 
   } as Omit<EnvironmentConfiguration, "proofServer">,
 };
 
-export const networkName = process.env.CANOPY_NETWORK ?? "preview";
+export const networkName = process.env.CANOPY_NETWORK ?? "preprod";
 
 export const environment: EnvironmentConfiguration = {
-  ...(networks[networkName] ?? networks.preview),
+  ...(networks[networkName] ?? networks.preprod),
   proofServer,
 } as EnvironmentConfiguration;
 

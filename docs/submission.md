@@ -138,6 +138,17 @@ the nullifier set, reading it *after* inserting the new nullifier would count
 the credit being retired right now and double it. The circuit reads the tally
 first, and the reason is commented in the contract.
 
+The longest single delay was neither code nor infrastructure but a missing
+measurement. A wallet cannot pay a fee until its dust scanner reaches the block
+that registered its NIGHT for generation, and that scan starts from genesis. On
+PreProd's 2.1 million blocks it runs for about three hours — during which the
+balance, and every projection computed from it, reads zero. A working scan and
+a wedged one are indistinguishable when the only observable is a zero. We chased
+two wrong theories before adding a progress log, at which point the answer was
+immediate: 199 blocks per second, steadily. The fix was a timeout sized from the
+measurement rather than a guess, and the server now serves the site while the
+wallet warms up instead of refusing connections for hours.
+
 We also lost time to infrastructure rather than code: the Preview faucet was
 returning `NOT_SERVING / SYNC_STUCK_RECOVERY` while still showing a green
 captcha, so requests appeared to succeed and silently did nothing. We diagnosed
