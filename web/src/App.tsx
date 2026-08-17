@@ -146,7 +146,7 @@ export default function App() {
 
         {tab === "how" && <HowItWorks meta={meta} />}
 
-        {tab !== "how" && !sessionId && (
+        {tab === "explore" && !sessionId && (
           <div className="working">
             <span className="spinner" />
             <span>

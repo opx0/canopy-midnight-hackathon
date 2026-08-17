@@ -37,9 +37,9 @@ export default function ChainInspector({
     <aside className="inspector">
       <div className="inspector-head">
         <h2 style={{ marginBottom: 0 }}>Chain inspector</h2>
-        <span className="pill live">
-          <span className="dot pulse" />
-          live
+        <span className={`pill${chain ? " live" : ""}`}>
+          <span className={`dot${chain ? " pulse" : ""}`} />
+          {chain ? "live" : "no contract yet"}
         </span>
       </div>
       <div className="inspector-sub">
