@@ -65,3 +65,8 @@ managed/
 # Midnight runtime state
 .midnight/
 server/logs/
+
+# Canopy runtime state
+server/deployment.json
+server/wallet-state.*.json
+server/history.*.jsonl
