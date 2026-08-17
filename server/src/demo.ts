@@ -7,6 +7,7 @@ import {
   publicLedger,
   rootCause,
   settle,
+  walletSnapshot,
 } from "./chain.js";
 import { recordAction } from "./history.js";
 import {
@@ -73,13 +74,13 @@ const submitOnce = async <T>(work: () => Promise<T>): Promise<T> => {
       return result;
     } catch (error) {
       const reason = rootCause(error);
-      if (attempt >= 4 || !STALE_STATE.test(reason)) throw error;
+      if (attempt >= 6 || !STALE_STATE.test(reason)) throw error;
       logger.warn(
-        { attempt, reason },
-        "the node rejected the transaction, waiting for the wallet to catch up with its own spends",
+        { attempt, reason, wallet: await walletSnapshot() },
+        "the node rejected the transaction, waiting before trying again",
       );
       await settle();
-      await new Promise((resolve) => setTimeout(resolve, 15_000));
+      await new Promise((resolve) => setTimeout(resolve, attempt * 45_000));
     }
   }
 };

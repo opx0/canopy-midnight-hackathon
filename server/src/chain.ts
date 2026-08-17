@@ -211,6 +211,29 @@ const deployOnce = async (): Promise<string> => {
   return address;
 };
 
+export const walletSnapshot = async (): Promise<Record<string, unknown>> => {
+  if (!walletFacade) return {};
+  const state = (await Rx.firstValueFrom(walletFacade.state())) as {
+    dust?: { balance(at: Date): bigint; state?: { progress?: { appliedIndex?: bigint } } };
+    unshielded?: { availableCoins?: readonly unknown[] };
+    pending?: unknown;
+  };
+  let pending = -1;
+  try {
+    pending = PendingTransactions.allPending(
+      state.pending as Parameters<typeof PendingTransactions.allPending>[0],
+    ).length;
+  } catch {
+    pending = -1;
+  }
+  return {
+    dust: state.dust?.balance(new Date()).toString(),
+    unshieldedCoins: state.unshielded?.availableCoins?.length,
+    applied: state.dust?.state?.progress?.appliedIndex?.toString(),
+    pending,
+  };
+};
+
 export const settle = async (timeoutMs = 180_000): Promise<void> => {
   if (!walletFacade) return;
   const clear = (state: { pending: unknown }) => {
