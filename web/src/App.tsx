@@ -133,6 +133,7 @@ export default function App() {
                   index < step ? " done" : ""
                 }`}
                 onClick={() => setStep(index)}
+                disabled={!sessionId && index > 0}
               >
                 <span className="step-num">{index < step ? "✓" : index + 1}</span>
                 {label}
@@ -156,25 +157,25 @@ export default function App() {
           </div>
         )}
 
-        {sessionId &&
-          tab !== "how" &&
-          (tab === "tour" ? (
-            <Tour
-              step={step}
-              setStep={setStep}
-              session={session}
-              chain={chain}
-              meta={meta}
-              refresh={refresh}
-            />
-          ) : (
-            <Explore
-              session={session}
-              chain={chain}
-              meta={meta}
-              refresh={refresh}
-            />
-          ))}
+        {tab === "tour" && (
+          <Tour
+            step={sessionId ? step : 0}
+            setStep={setStep}
+            session={session}
+            chain={chain}
+            meta={meta}
+            refresh={refresh}
+          />
+        )}
+
+        {tab === "explore" && sessionId && (
+          <Explore
+            session={session}
+            chain={chain}
+            meta={meta}
+            refresh={refresh}
+          />
+        )}
       </main>
 
       <ChainInspector chain={chain} meta={meta} history={history} />

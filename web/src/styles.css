@@ -2,11 +2,11 @@
   --bg: #0a0f0d;
   --bg-raised: #111815;
   --bg-sunken: #070b09;
-  --line: #1e2a24;
+  --line: #24312b;
   --line-bright: #2c3d34;
   --text: #e8f0ea;
-  --text-dim: #93a89b;
-  --text-faint: #61756a;
+  --text-dim: #b6c8bd;
+  --text-faint: #8ca396;
   --leaf: #4ade80;
   --leaf-dim: #22795180;
   --amber: #fbbf24;
@@ -27,8 +27,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.62;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -109,8 +109,8 @@ code,
 }
 
 .brand-tag {
-  color: var(--text-faint);
-  font-size: 13px;
+  color: var(--text-dim);
+  font-size: 14px;
   border-left: 1px solid var(--line-bright);
   padding-left: 12px;
   margin-left: 2px;
@@ -134,10 +134,10 @@ h2 {
 }
 
 h3 {
-  font-size: 13px;
+  font-size: 13.5px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--text-faint);
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
   font-weight: 600;
   margin-bottom: 12px;
 }
@@ -271,11 +271,11 @@ p strong {
 .step-chip {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 7px 14px;
   border-radius: 999px;
-  font-size: 12.5px;
-  color: var(--text-faint);
+  font-size: 13.5px;
+  color: var(--text-dim);
   border: 1px solid transparent;
   transition: all 0.2s;
 }
@@ -370,7 +370,7 @@ p strong {
 }
 
 .tag {
-  font-size: 11px;
+  font-size: 11.5px;
   padding: 3px 9px;
   border-radius: 999px;
   font-weight: 600;
@@ -414,8 +414,8 @@ p strong {
 }
 
 .inspector-sub {
-  font-size: 12.5px;
-  color: var(--text-faint);
+  font-size: 13.5px;
+  color: var(--text-dim);
   margin-bottom: 22px;
   line-height: 1.5;
 }
@@ -444,8 +444,8 @@ p strong {
 }
 
 .stat-label {
-  font-size: 11px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-top: 1px;
@@ -457,8 +457,8 @@ p strong {
 
 .hash {
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12.5px;
+  color: var(--text-dim);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -481,8 +481,8 @@ p strong {
 }
 
 .empty {
-  color: var(--text-faint);
-  font-size: 12.5px;
+  color: var(--text-dim);
+  font-size: 13.5px;
   font-style: italic;
   padding: 8px 0;
 }
@@ -638,9 +638,9 @@ a:hover {
 }
 
 .tab {
-  padding: 10px 15px;
-  font-size: 14px;
-  color: var(--text-faint);
+  padding: 11px 16px;
+  font-size: 15px;
+  color: var(--text-dim);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   white-space: nowrap;
@@ -709,14 +709,14 @@ a:hover {
 }
 
 .live-where {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--text-dim);
 }
 
 .live-address {
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12.5px;
+  color: var(--text-dim);
   word-break: break-all;
 }
 
@@ -733,15 +733,15 @@ a:hover {
 }
 
 .live-value {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 640;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .live-label {
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12.5px;
+  color: var(--text-dim);
   margin-top: 3px;
   line-height: 1.35;
 }
