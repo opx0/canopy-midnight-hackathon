@@ -11,7 +11,7 @@ import {
   findDeployedContract,
 } from "@midnight-ntwrk/midnight-js-contracts";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, readFile, writeFile } from "node:fs/promises";
 import { pino } from "pino";
 
 import {
@@ -22,6 +22,7 @@ import {
 } from "@canopy/contract";
 import {
   deploymentFile,
+  deploymentLog,
   environment,
   networkName,
   zkConfigPath,
@@ -195,10 +196,13 @@ const deployOnce = async (): Promise<string> => {
     ],
   });
   const address = deployed.deployTxData.public.contractAddress;
-  await writeFile(
-    deploymentFile,
-    `${JSON.stringify({ network: networkName, contractAddress: address, deployedAt: new Date().toISOString() }, null, 2)}\n`,
-  );
+  const record = {
+    network: networkName,
+    contractAddress: address,
+    deployedAt: new Date().toISOString(),
+  };
+  await appendFile(deploymentLog, `${JSON.stringify(record)}\n`);
+  await writeFile(deploymentFile, `${JSON.stringify(record, null, 2)}\n`);
   logger.info({ contractAddress: address }, "contract deployed");
   return address;
 };

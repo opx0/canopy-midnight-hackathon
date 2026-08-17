@@ -18,6 +18,8 @@ export const zkConfigPath = path.join(
 
 export const deploymentFile = path.join(root, "server", "deployment.json");
 
+export const deploymentLog = path.join(root, "server", "deployments.jsonl");
+
 export const proofServer =
   process.env.CANOPY_PROOF_SERVER ?? "http://127.0.0.1:6300";
 

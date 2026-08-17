@@ -56,10 +56,28 @@ const makeCompany = (sessionId: string, role: CompanyRole): CompanyState => {
 
 const sharedBatchId = bytes();
 
+const STALE_STATE = /Invalid Transaction|submission|1010|timed ?out|Custom error/i;
+
+const submitOnce = async <T>(work: () => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await enqueue(work);
+    } catch (error) {
+      const reason = rootCause(error);
+      if (attempt >= 4 || !STALE_STATE.test(reason)) throw error;
+      logger.warn(
+        { attempt, reason },
+        "the node rejected the transaction, waiting for the wallet to catch up with its own spends",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+    }
+  }
+};
+
 const submit = async <T>(action: string, work: () => Promise<T>): Promise<T> => {
   const startedAt = Date.now();
   try {
-    const result = await enqueue(work);
+    const result = await submitOnce(work);
     void recordAction(action, Date.now() - startedAt, result);
     return result;
   } catch (error) {
