@@ -121,6 +121,12 @@ never be replayed as a registry key.
 
 ## Try it
 
+![Retiring a credit](docs/images/retirement.png)
+
+*The company's private credit ledger on the left; the complete public state of
+the contract on the right. Retiring moves a nullifier into the public set and
+tells the world nothing else.*
+
 The deployed demo needs no wallet, no extension and no signup. One funded
 wallet on the backend pays the fees; the four roles are separate *contract*
 identities derived per visitor, so two people exploring at once never collide.
@@ -128,6 +134,13 @@ identities derived per visitor, so two people exploring at once never collide.
 Every button writes a real transaction to the deployed contract. The attempts
 that are supposed to fail fail during local circuit execution, which is why they
 come back instantly and cost nothing.
+
+![Trying to cheat](docs/images/cheating.png)
+
+The site also explains its own cryptography, so evaluating Canopy needs no
+clone of this repository:
+
+![How it works](docs/images/how-it-works.png)
 
 ---
 

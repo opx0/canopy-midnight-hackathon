@@ -100,7 +100,7 @@ export const fund = async (
             dust(current) > 0n ||
             current.dust.state.progress.isCompleteWithin(64n),
         ),
-        Rx.timeout({ each: 3_600_000 }),
+        Rx.timeout({ each: 21_600_000 }),
       ),
     );
 
