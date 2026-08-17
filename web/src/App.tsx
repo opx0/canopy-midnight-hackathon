@@ -92,9 +92,7 @@ export default function App() {
     <div className="app">
       <main className="main">
         <header className="brand">
-          <div className="brand-mark" aria-hidden>
-            🌲
-          </div>
+          <img className="brand-mark" src="/mark-512.png" alt="" aria-hidden />
           <div className="brand-name">Canopy</div>
           <div className="brand-tag">
             Carbon claims you can verify. Books you cannot read.

@@ -95,13 +95,10 @@ code,
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: linear-gradient(140deg, #16a34a, #0f7a43);
-  display: grid;
-  place-items: center;
-  font-size: 16px;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-name {
