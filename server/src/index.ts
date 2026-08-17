@@ -63,7 +63,7 @@ app.listen(port, () => {
   logger.info({ port }, "Canopy is serving, wallet still warming up");
 });
 
-bootstrap().then(
+bootstrap({ deployIfMissing: process.env.CANOPY_DEPLOY_IF_MISSING === "1" }).then(
   ({ contractAddress }) => {
     warmUp.ready = true;
     logger.info({ contractAddress }, "Canopy is ready");
