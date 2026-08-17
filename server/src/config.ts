@@ -53,6 +53,12 @@ const networks: Record<string, Omit<EnvironmentConfiguration, "proofServer">> = 
 
 export const networkName = process.env.CANOPY_NETWORK ?? "preprod";
 
+export const walletStateFile = path.join(
+  root,
+  "server",
+  `wallet-state.${networkName}.json`,
+);
+
 export const environment: EnvironmentConfiguration = {
   ...(networks[networkName] ?? networks.preprod),
   proofServer,

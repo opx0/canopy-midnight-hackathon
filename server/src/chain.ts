@@ -1,10 +1,10 @@
 import { WebSocket } from "ws";
 import {
-  MidnightWalletProvider,
   initializeMidnightProviders,
   type ContractConfiguration,
 } from "@midnight-ntwrk/testkit-js";
 import { fund } from "./funding.js";
+import { buildWallet, saveWalletState } from "./wallet.js";
 import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import {
   deployContract,
@@ -79,11 +79,7 @@ export const bootstrap = async ({
   setNetworkId(environment.walletNetworkId);
   logger.info({ network: networkName }, "starting Canopy backend");
 
-  const walletProvider = await MidnightWalletProvider.build(
-    logger,
-    environment,
-    walletSeed,
-  );
+  const walletProvider = await buildWallet(logger);
   await walletProvider.start(false);
 
   await fund(
@@ -91,6 +87,15 @@ export const bootstrap = async ({
     walletProvider.wallet,
     walletProvider.unshieldedKeystore as Parameters<typeof fund>[2],
   );
+
+  await catchUpToTip(walletProvider.wallet);
+
+  const keepScanSaved = () =>
+    saveWalletState(logger, walletProvider).catch((error: unknown) =>
+      logger.warn({ reason: rootCause(error) }, "could not save the DUST scan"),
+    );
+  await keepScanSaved();
+  setInterval(keepScanSaved, 600_000).unref();
 
   await access(`${zkConfigPath}/keys`).catch(() => {
     throw new Error(
@@ -123,7 +128,49 @@ export const bootstrap = async ({
   return { contractAddress };
 };
 
-const deploy = async (): Promise<string> => {
+const catchUpToTip = async (wallet: {
+  waitForSyncedState(): Promise<unknown>;
+}): Promise<void> => {
+  logger.info("waiting for the wallet to reach the chain tip");
+  const startedAt = Date.now();
+  let settled = false;
+  const deadline = new Promise<void>((resolve) =>
+    setTimeout(() => resolve(), 900_000).unref(),
+  );
+  await Promise.race([
+    wallet.waitForSyncedState().then(() => {
+      settled = true;
+    }),
+    deadline,
+  ]);
+  logger.info(
+    { seconds: Math.round((Date.now() - startedAt) / 1000), atTip: settled },
+    "wallet sync wait finished",
+  );
+};
+
+const withRetries = async <T>(
+  label: string,
+  attempts: number,
+  work: () => Promise<T>,
+): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await work();
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      logger.warn(
+        { attempt, of: attempts, reason: rootCause(error) },
+        `${label} failed, retrying`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    }
+  }
+};
+
+const deploy = (): Promise<string> => withRetries("deployment", 5, deployOnce);
+
+const deployOnce = async (): Promise<string> => {
   logger.info("deploying Canopy contract");
   const deployed = await deployContract(providers, {
     compiledContract: CanopyCompiledContract,
