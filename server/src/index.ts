@@ -2,11 +2,14 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import { bootstrap, connect, logger } from "./chain.js";
-import { port, root } from "./config.js";
+import { port, root, staticMirror } from "./config.js";
+import { cp } from "node:fs/promises";
 import routes from "./routes.js";
-import { pruneSessions, seedShowcase } from "./demo.js";
+import { pruneSessions, seedShowcase, showcaseComplete } from "./demo.js";
 import { keepSnapshotting, load } from "./history.js";
 import { scan } from "./funding.js";
+import { progress, nowDoing } from "./progress.js";
+import { fees, keepObserving, secondsToAfford } from "./fees.js";
 import { pruneJobs } from "./jobs.js";
 
 const warmUp = {
@@ -26,6 +29,9 @@ app.get("/api/status", (_req, res) => {
     reads: warmUp.reads,
     failure: warmUp.failure,
     warmingUpSeconds: Math.round((Date.now() - warmUp.since) / 1000),
+    stage: warmUp.ready ? undefined : progress.stage,
+    stageSeconds: Math.round((Date.now() - progress.since) / 1000),
+    fees: { ...fees, secondsToAfford: secondsToAfford() },
     scan,
   });
 });
@@ -68,9 +74,21 @@ app.listen(port, () => {
   logger.info({ port }, "Canopy is serving, wallet still warming up");
 });
 
+// Do this before the wallet starts, because that is what blocks.
+if (staticMirror) {
+  void cp(web, staticMirror, { recursive: true }).then(
+    () => logger.info({ staticMirror }, "mirrored the frontend for the web server"),
+    (error: unknown) =>
+      logger.warn({ error, staticMirror }, "could not mirror the frontend"),
+  );
+}
+
 connect()
   .then(async (deployed) => {
     warmUp.reads = deployed;
+    // Start sampling the fee balance now, not after the wallet is ready: during a cold
+    // scan that reading is the most interesting number on the page.
+    keepObserving();
     await load();
     if (deployed) keepSnapshotting();
   })
@@ -86,7 +104,22 @@ connect()
       warmUp.reads = true;
       logger.info({ contractAddress }, "Canopy is ready");
       keepSnapshotting();
-      await seedShowcase();
+      nowDoing("seeding the showcase with real transactions");
+      // Seeding is resumable and the thing that interrupts it — the fee wallet running
+      // out of DUST — recovers on its own given time or a faucet top-up. So keep
+      // coming back to it indefinitely rather than giving up after an hour and
+      // leaving the site without the attested claim a visitor should land on.
+      void (async () => {
+        for (let attempt = 1; ; attempt++) {
+          await seedShowcase();
+          if (await showcaseComplete().catch(() => false)) {
+            nowDoing("ready");
+            return;
+          }
+          logger.warn({ attempt }, "showcase is incomplete, will try again later");
+          await new Promise((resolve) => setTimeout(resolve, 1_800_000));
+        }
+      })();
     },
     (error: unknown) => {
       warmUp.failure = error instanceof Error ? error.message : String(error);

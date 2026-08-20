@@ -8,7 +8,10 @@
     "deploy-contract": "tsx src/scripts/deploy.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/scripts/smoke.ts"
+    "smoke": "tsx src/scripts/smoke.ts",
+    "top-up": "tsx src/scripts/top-up.ts",
+    "inspect-tx": "tsx src/scripts/inspect-tx.ts",
+    "verify-chain": "tsx src/scripts/verify-chain.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
