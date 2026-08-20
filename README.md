@@ -6,13 +6,20 @@
 | --- | --- |
 | **Live demo** | **https://canopy.opxz.dev** — no wallet, no extension, no signup |
 | **Network** | Midnight **PreProd** |
-| **Contract address** | `85aa0f8839a9771906dbab16612024a56b070b2679088e61442cb1bfd8eda709` |
-| **Deployed** | 2026-08-17T14:05:02Z |
+| **Contract address** | `52a90ef413f1a794a2304ba0df65c60caa06c063e93a68511975d91b50968c5d` |
+| **Deployed** | 2026-08-20T14:51:51Z |
 
 Everything on the live site is a real transaction against that address. The
 figures at the top of the page — transaction count, median prove-and-confirm
-time, tonnes issued, retirements, refused fraud attempts — are measured, not
-written by hand.
+time, tonnes issued, retirements, trades, refused frauds — are measured, not
+written by hand. So is everything under **What it costs**: ZK operation counts
+and proving-key sizes are read from the compiled artefacts, and the latencies
+come from transactions this deployment actually landed.
+
+An earlier build ran at
+`85aa0f8839a9771906dbab16612024a56b070b2679088e61442cb1bfd8eda709` until the
+credit-transfer circuit forced a redeploy on 2026-08-20; `server/deployments.jsonl`
+keeps the full list.
 
 Canopy is a carbon credit registry on [Midnight](https://midnight.network) where
 retiring a credit is publicly, permanently unrepeatable — and where nothing
@@ -21,6 +28,32 @@ about a company's offset volumes ever reaches the chain.
 A company can prove *"in FY2026 Q3 we retired at least 1,000 tonnes"* without
 revealing the real figure, which credits it used, or what it still holds. An
 accredited auditor can be shown everything. Everyone else sees a hash.
+
+### Check it without trusting this repository
+
+Midnight's public indexer answers anonymously, so the contract's state can be
+read straight from the network:
+
+```bash
+curl https://indexer.preprod.midnight.network/api/v4/graphql \
+  -H 'content-type: application/json' \
+  -d '{"query":"query($a:HexEncoded!){contractAction(address:$a){state}}",
+       "variables":{"a":"52a90ef413f1a794a2304ba0df65c60caa06c063e93a68511975d91b50968c5d"}}'
+```
+
+What comes back is the serialised contract state; `ledger()` from
+`@canopy/contract` decodes it into the counters, commitments, nullifiers and
+claims the site displays. This repo will do that for you and diff the result
+against what the live site serves:
+
+```bash
+npm run verify-chain --workspace @canopy/server -- \
+  52a90ef413f1a794a2304ba0df65c60caa06c063e93a68511975d91b50968c5d
+# → identical — the site adds nothing of its own
+```
+ No third-party PreProd explorer is indexing recent
+blocks at the time of writing — NightForge's is months behind — so this is the
+honest way to verify.
 
 ---
 
@@ -69,7 +102,11 @@ Registry  ──issues──▶  credit commitment  ──▶ public Merkle tree
                                               (supply is auditable,
                                                ownership is not)
 
-Company   ──retires──▶ nullifier          ──▶ public nullifier set
+Company   ──sends───▶  nullifier          ──▶ public transfer set
+                     ──plus a fresh commitment for the buyer
+                       (no buyer, no seller, no size on chain)
+
+Company   ──retires──▶ nullifier          ──▶ public retirement set
                        (unforgeable,           (double retirement is
                         unlinkable)             structurally impossible)
                      ──folds tonnage into──▶ private tally commitment
@@ -88,11 +125,25 @@ Auditor   ──attests──▶ on-chain attestation
 — that is what a registry is for — but the individual holder and size are known
 only to the holder.
 
-**Retirement publishes a nullifier, not a serial.** The nullifier is
-`hash("canopy:retire:", serial, ownerSecretKey)`. Because it depends on the
+**Spending publishes a nullifier, not a serial.** The nullifier is
+`hash("canopy:spend:", commitment, ownerSecretKey)`. Because it depends on the
 owner's secret it cannot be forged by anyone else, and it cannot be matched back
 to a published serial by an observer. Inserting it twice is rejected by the
 contract, so double counting is not *detected* — it is unrepresentable.
+
+It is keyed to the commitment rather than the serial deliberately. A serial
+outlives a transfer; a commitment does not. Keying on the serial would let a
+seller spend a note the buyer now owns — and binding the seller's key in to
+close that hole would permanently brick any credit that came back to a previous
+holder. Keying on the commitment gives every note exactly one nullifier for its
+whole life, in exactly one pair of hands.
+
+**A trade is a spend and a re-issue.** `transferCredit` burns the seller's note
+and inserts `hash(serial, tonnes, newOwner, freshSalt)` for the buyer. The chain
+records one nullifier and one new leaf and cannot link them. Tonnage cannot
+change on the way: the old note had to open against the tree, which binds its
+size, and the new commitment is built from the same value inside the circuit.
+The note that opens it travels off-chain, the way a shielded memo would.
 
 **The tally is a commitment the company alone can open.** Each company's public
 entry is `hash("canopy:tally:", tonnes, hash(secretKey, tonnes))`. It is binding
@@ -213,6 +264,7 @@ to the backend on port 3001.
 | `CANOPY_PROOF_SERVER` | `http://127.0.0.1:6300` | Proof server URL |
 | `CANOPY_SEED` | a development seed | Master seed for the fee wallet and role keys |
 | `PORT` | `3001` | Backend port |
+| `CANOPY_STATIC_MIRROR` | unset | Copy `web/dist` here at startup so a web server can serve the page while the wallet blocks the event loop. See [docs/deployment.md](docs/deployment.md). |
 
 `CANOPY_SEED` derives everything: change it and you get a different fee wallet
 and different registry/auditor identities, which means you must redeploy. To
@@ -244,8 +296,13 @@ docs/       architecture, deployment, submission notes
 `contract/src/canopy.compact` is the whole protocol and is worth reading first;
 it is about 200 lines.
 
-- [docs/architecture.md](docs/architecture.md) — the data model, the three
+- [docs/architecture.md](docs/architecture.md) — the data model, the four
   mechanisms, and what the Compact compiler enforces
+- [docs/what-we-learned.md](docs/what-we-learned.md) — the things that cost us
+  hours and are not in Midnight's documentation: what node error 117 really is,
+  the DUST budget in numbers, why a drained fee wallet cannot re-register
+  itself, and the witness rule that a fraud test which does not lie proves
+  nothing
 - [docs/deployment.md](docs/deployment.md) — standing up the public demo
 
 ---
@@ -257,6 +314,12 @@ four-role story and every way of cheating at it are exercised without a node, a
 wallet or a proof server:
 
 - a credit cannot be retired twice
+- a credit that was sent to someone else cannot then be retired by the sender
+- a credit cannot be sent to two holders
+- a retired credit cannot be sent on
+- a credit that comes back to a previous holder is still spendable
+- a transfer writes no buyer to the chain, only a commitment
+- a transfer conserves tonnage and cannot be built on a borrowed Merkle path
 - a credit cannot be retired by someone who does not own it
 - a credit the registry never issued cannot be retired
 - **a dishonest prover cannot substitute someone else's Merkle path** — this one
@@ -283,16 +346,18 @@ These are real, and stating them is more useful than pretending otherwise.
   deployment, mirroring how real registries and accredited verifiers work. A
   production system would want a set of registries and revocable auditor
   credentials.
-- **No secondary market.** Credits are issued to a holder and retired by that
-  holder. Transfer would need a spend-and-reissue circuit — the nullifier
-  machinery already present is the hard part.
+- **Trading has no settlement leg.** `transferCredit` moves a credit when the
+  seller says so. Payment, escrow and atomic delivery-versus-payment are
+  somebody else's problem here, as they are in most registry software.
 - **Activity is visible even though volumes are not.** Each retirement updates
   the company's public tally entry, so an observer can count how many
   retirement transactions a company made. The tonnages stay hidden. Hiding the
   event count too would need the tally to move to a nullifier-chained
   commitment.
-- **Tree capacity.** The credit tree is depth 10, so 1,024 credits per
-  deployment. Raising it costs a little proving time per level and nothing else.
+- **Tree capacity.** The credit tree is depth 10, so 1,024 notes per deployment,
+  and issues and transfers share that budget. Raising it costs one hash per level
+  inside two circuits and nothing at all on chain. See **What it costs** on the
+  live site for the measured numbers.
 - **The very first start is slow.** Midnight pays fees in DUST, which is
   generated by registered NIGHT and can only be found by replaying the ledger
   from genesis — about two hours on a fast machine, five on a small VM. The
@@ -303,6 +368,19 @@ These are real, and stating them is more useful than pretending otherwise.
 - **The demo's fee wallet is custodial.** That is what removes the wallet
   install from a visitor's path. It has no bearing on the protocol: the fee
   payer and the contract identity are deliberately separate.
+- **One fee wallet is a throughput ceiling.** Midnight regenerates DUST from
+  registered NIGHT at a fixed rate — for one UTxO, 8.27×10¹² per second toward a
+  cap of 5×10¹⁸ — and every visitor's transaction is paid from the same balance.
+  Submissions wait for an affordable fee rather than failing, and the interface
+  says so when they do. A production deployment gives each company its own
+  wallet and its own registered NIGHT, and their transactions are independent;
+  the contract has no global lock. **What it costs** on the live site shows the
+  current balance, the measured regeneration rate and the sustained rate it
+  supports. [docs/what-we-learned.md](docs/what-we-learned.md) has the
+  arithmetic and how we found it the hard way.
+- **A sandbox is created only when you ask for one.** Opening the site costs
+  nothing; starting the tour or the Explore tab spends four real transactions
+  giving you your own company keys. Reading is free.
 
 ---
 

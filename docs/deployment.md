@@ -6,13 +6,51 @@ This is how that gets stood up.
 ## What runs where
 
 ```
-  visitor ──https──▶ nginx (TLS, your domain)
-                       │ proxy_pass
-                       ▼
-                  canopy backend :3001  ── serves web/dist and /api
-                       │
-                       ├──▶ proof server :6300   (Docker, local)
-                       └──▶ Midnight PreProd      (indexer + node, remote)
+  visitor ──https──▶ Caddy (TLS, your domain)
+                       ├── /*      static files from /srv/canopy
+                       └── /api/*  reverse_proxy ▶ canopy backend :3001
+                                                     │
+                                     ┌───────────────┴───────────────┐
+                                     ▼                               ▼
+                            proof server :6300              Midnight PreProd
+                              (Docker, local)             (indexer + node, remote)
+```
+
+**Serve the static files outside Node.** Restoring the cached DUST scan is
+synchronous work inside the wallet SDK and holds Node's event loop for about
+three and a half minutes on a small VM — during which the backend accepts
+connections and answers none of them. Anyone arriving mid-restart gets a hung
+socket. With Caddy serving the page directly, they get the site immediately and
+the panels fill in when the API comes back.
+
+The backend copies `web/dist` to `CANOPY_STATIC_MIRROR` at startup, before the
+wallet begins, so the two never drift:
+
+```
+canopy.opxz.dev {
+    handle /api/* {
+        reverse_proxy 127.0.0.1:3001 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+    handle {
+        root * /srv/canopy
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
+
+`try_files … /index.html` is what makes `/claim/<id>` permalinks work: the
+frontend routes them client-side, so every unknown path has to return the app.
+Create the directory as a path the web server can traverse — a home directory
+usually is not:
+
+```bash
+sudo mkdir -p /srv/canopy && sudo chown "$USER" /srv/canopy && sudo chmod 755 /srv/canopy
 ```
 
 ## One-time: fund the fee wallet

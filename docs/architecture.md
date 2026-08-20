@@ -20,7 +20,8 @@ boundary between them.
 | Field | Type | Why it is public |
 | --- | --- | --- |
 | `creditTree` | `HistoricMerkleTree<10, Bytes<32>>` | Commitments to every issued credit. Membership proves a credit is real; the tree reveals nothing about holders. Historic, so a proof built against an earlier root still verifies after more credits are minted. |
-| `retiredCredits` | `Set<Bytes<32>>` | The nullifier set. Uniqueness has to be publicly checkable or it means nothing. |
+| `retiredCredits` | `Set<Bytes<32>>` | Nullifiers of retired notes. Uniqueness has to be publicly checkable or it means nothing. |
+| `transferredCredits` | `Set<Bytes<32>>` | Nullifiers of notes that were passed on. Kept apart from retirements so the public retirement count cannot be inflated by trading, and so the tally witness can recover a company's retired tonnage without counting credits it merely sold. |
 | `batches` | `Map<Bytes<32>, Batch>` | Registry supply — project, vintage, tonnage. Publishing supply is what a registry is *for*. |
 | `companies` | `Map<Bytes<32>, Bytes<32>>` | Company public key → tally commitment. The key is public so claims are attributable; the value hides the volume. |
 | `claims` | `Map<Bytes<32>, Claim>` | Published thresholds and their attestation status. |
@@ -38,7 +39,7 @@ type CanopyPrivateState = { secretKey, credits: CreditNote[] };
 Three witnesses feed the circuits: `secretKey()`, `creditPath(commitment)` and
 `tallyTonnes()`.
 
-## The three mechanisms
+## The four mechanisms
 
 ### 1. Credits are commitments
 
@@ -50,10 +51,10 @@ The registry inserts this into `creditTree`. Supply is auditable in aggregate;
 individual ownership and size are not on chain at all. Retiring requires a
 Merkle membership proof, so a credit that was never issued cannot be spent.
 
-### 2. Retirement publishes an unlinkable nullifier
+### 2. Spending publishes an unlinkable nullifier
 
 ```
-nullifier = persistentHash("canopy:retire:" ‖ serial ‖ ownerSecretKey)
+nullifier = persistentHash("canopy:spend:" ‖ commitment ‖ ownerSecretKey)
 ```
 
 Three properties fall out of including the secret key:
@@ -62,11 +63,22 @@ Three properties fall out of including the secret key:
   the commitment opening the circuit checks alongside it.
 - **Unlinkable.** An observer holding the published serial list cannot match a
   nullifier to a serial, because the mapping needs a secret.
-- **Unique.** `assert(!retiredCredits.member(nullifier))` before insertion. A
-  second retirement of the same credit cannot produce a transaction.
+- **Unique.** Both `retireCredit` and `transferCredit` assert the nullifier is
+  in neither set before inserting it into their own. A note can be spent once,
+  either way, and never again.
 
 That last point is the design's centre of gravity. Double counting is not
 detected after the fact by reconciling records — it is unrepresentable.
+
+**Why the commitment and not the serial.** The first version keyed the
+nullifier to `(serial, secretKey)`, which is correct as long as credits never
+move. A serial outlives a transfer, so once one exists the seller's nullifier
+and the buyer's differ, and the seller can retire a credit they already sold.
+Binding the sender's key in closes that, but then a credit returning to a
+previous holder is permanently unspendable — its nullifier was burnt on the way
+out. The commitment changes on every hop, so keying on it gives each note
+exactly one nullifier, for its whole life, in exactly one pair of hands. The
+test suite pins both cases.
 
 ### 3. The tally is a commitment only its owner can open
 
@@ -81,8 +93,34 @@ if a transaction fails. The commitment is binding (it cannot be reopened to a
 different number) and hiding (the nonce depends on a secret).
 
 `retireCredit` reads the current tally, verifies it against the on-chain
-commitment, and writes the updated one. `publishClaim` proves
+commitment, and writes the updated one. `transferCredit` does not touch the
+tally at all: passing a credit on is not retiring it, and the seller's total
+must not move. `publishClaim` proves
 `tally >= threshold` without revealing `tally`.
+
+### 4. A trade is a spend and a re-issue
+
+```
+transferCredit(serial, tonnes, salt, recipient, freshSalt)
+  → nullify persistentHash("canopy:spend:" ‖ oldCommitment ‖ sellerSecretKey)
+  → insert  persistentHash(serial ‖ tonnes ‖ recipient ‖ freshSalt)
+```
+
+The seller proves membership of their own note, burns it, and plants a new
+commitment for the buyer. Nothing identifies either party: the recipient is a
+circuit parameter, and a parameter is private until `disclose()` says otherwise,
+so only the resulting commitment reaches the chain. The fresh salt is what stops
+an observer from matching the incoming leaf to the outgoing nullifier by
+recomputing the hash.
+
+Tonnage is conserved structurally rather than by assertion. The old commitment
+had to open against the tree, which binds `(serial, tonnes, seller, salt)`, and
+the new commitment is built from the same `tonnes` variable inside the circuit —
+a prover cannot supply one value to the check and a different one to the insert.
+
+Transfers and issues share the credit tree, so both count against its 1,024-note
+capacity. The note that opens the new commitment travels off-chain; the contract
+neither knows nor cares how it got there.
 
 **Ordering constraint.** `tallyTonnes()` is read *before* the nullifier is
 inserted. The tally is reconstructed by testing the holder's own notes against
