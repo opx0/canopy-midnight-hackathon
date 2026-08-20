@@ -64,7 +64,7 @@ code,
 
 @media (max-width: 1000px) {
   .app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .inspector {
     border-left: none !important;
@@ -77,6 +77,7 @@ code,
 .main {
   padding: 36px clamp(24px, 4vw, 64px) 96px;
   width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 640px) {
@@ -90,6 +91,7 @@ code,
 .brand {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 40px;
 }
@@ -397,6 +399,24 @@ p strong {
   color: #075985;
 }
 
+/* A refusal is the contract working. It gets the loud colour; a plumbing failure
+   gets the quiet one, so a judge can tell our bugs from the circuit's teeth. */
+.tag.refused {
+  background: #fee2e6;
+  color: var(--rose);
+}
+
+.reason {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--rose);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+
 /* ------------------------------------------------------------- inspector */
 
 .inspector {
@@ -481,8 +501,9 @@ p strong {
 }
 
 @keyframes land {
-  0% { background: #14321f; border-color: var(--leaf); }
-  100% { background: var(--bg); }
+  0%   { background: #d7f0e0; border-color: var(--leaf); transform: translateX(-6px); }
+  35%  { background: #d7f0e0; border-color: var(--leaf); transform: none; }
+  100% { background: var(--bg-raised); border-color: var(--line); }
 }
 
 .empty {
@@ -510,8 +531,9 @@ p strong {
 .split-pane {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 16px 18px 18px;
   background: var(--bg-sunken);
+  min-width: 0;
 }
 
 .split-pane.private {
@@ -730,9 +752,21 @@ a:hover {
 
 .live-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
+}
+
+@media (min-width: 1500px) {
+  .live-figures {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .live-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .live-figure {
@@ -829,4 +863,683 @@ a:hover {
 
 .live-figure.live-foot {
   grid-column: 1 / -1;
+}
+
+/* --------------------------------------------------------- benchmarks */
+
+.list.bench .list-row {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.list.bench .num {
+  min-width: 62px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.list.bench .list-row.head .num {
+  text-align: right;
+}
+
+/* -------------------------------------------------------------- trend */
+
+.trend {
+  margin: 0 0 26px;
+}
+
+.trend-head {
+  font-size: 13.5px;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+  max-width: 74ch;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.trend-cell {
+  background: var(--bg-raised);
+  padding: 14px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trend-cell figcaption {
+  display: flex;
+  flex-direction: column;
+}
+
+.trend-value {
+  font-size: 22px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.trend-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.trend-delta {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.spark {
+  width: 100%;
+  height: 44px;
+  display: block;
+}
+
+/* --------------------------------------------------------- claim page */
+
+.claim-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 64px) clamp(20px, 4vw, 40px) 80px;
+}
+
+.claim-hero {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--leaf);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: clamp(20px, 3vw, 32px);
+  margin-bottom: 22px;
+}
+
+.claim-hero h1 {
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.claim-list {
+  padding-left: 20px;
+  color: var(--text-dim);
+  font-size: 14.5px;
+}
+
+.claim-list li {
+  margin-bottom: 10px;
+}
+
+.claim-facts {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.claim-facts code {
+  font-size: 12.5px;
+  word-break: break-all;
+  color: var(--text-dim);
+}
+
+.claim-key {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.working > * {
+  min-width: 0;
+}
+
+.working > .spinner,
+.working > .elapsed {
+  flex: 0 0 auto;
+}
+
+/* The heading's hard break is a typographic choice for a wide column; on a phone it
+   lands mid-sentence, so drop it and let the text wrap where it wants to. */
+@media (max-width: 700px) {
+  .wide-break {
+    display: none;
+  }
+
+  .brand-tag {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+.rejected.broken {
+  border-left-color: var(--amber);
+}
+
+.rejected.broken .rejected-head {
+  color: var(--amber);
+}
+
+a.tag {
+  text-decoration: none;
+}
+
+a.tag:hover {
+  filter: brightness(0.94);
+}
+
+/* ------------------------------------------------------------ narrow screens */
+
+@media (max-width: 720px) {
+  /* Four tabs and eight tour chips do not fit; scrolling beats wrapping into a
+     three-line block that pushes the content off the first screen. */
+  .tabs,
+  .steps {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs::-webkit-scrollbar,
+  .steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab,
+  .step-chip {
+    flex: 0 0 auto;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  /* Six numeric columns cannot survive a phone. Let the table scroll sideways
+     inside its own box rather than squeezing every column to two characters. */
+  .list.bench {
+    overflow-x: auto;
+  }
+
+  .list.bench .list-row {
+    min-width: 560px;
+  }
+
+  .live-address {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .live-head {
+    flex-wrap: wrap;
+  }
+}
+
+/* This sits in the narrow inspector column and is meant to be copied, so wrap it
+   rather than hiding two thirds of the command behind a scrollbar. */
+.code-block.verify {
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+
+.paused {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 80ch;
+}
+
+.site-foot {
+  margin-top: 64px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 80ch;
+}
+
+.site-foot a {
+  color: var(--leaf);
+  text-decoration: none;
+  border-bottom: 1px solid var(--leaf-dim);
+}
+
+.site-foot a:hover {
+  border-bottom-color: var(--leaf);
+}
+
+.site-foot code {
+  word-break: break-all;
+}
+
+.verify-form {
+  margin-top: 40px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  display: grid;
+  gap: 12px;
+  max-width: 80ch;
+}
+
+.verify-form label {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.verify-form .field {
+  font-family: var(--mono);
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* ----------------------------------------------------------- lifecycle */
+
+.cycle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  overflow: hidden;
+  margin: 0 0 26px;
+}
+
+.cycle-band {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-faint);
+  padding: 11px 16px 0;
+}
+
+.cycle-band.private {
+  color: var(--leaf);
+  padding: 0;
+}
+
+.cycle-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  margin: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.cycle-stage {
+  background: var(--bg-raised);
+  padding: 13px 14px 15px;
+  min-width: 0;
+  position: relative;
+  transition: background 0.25s ease;
+}
+
+/* The arrow between stages. Drawn rather than typed so it survives translation and
+   never becomes a stray character on a narrow screen. */
+.cycle-stage + .cycle-stage::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-top: 1.5px solid var(--line-bright);
+  border-right: 1.5px solid var(--line-bright);
+  background: var(--bg-raised);
+  z-index: 1;
+}
+
+.cycle-stage.on {
+  background: #eaf6ee;
+}
+
+.cycle-who {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+}
+
+.cycle-what {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 16px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  margin: 4px 0 5px;
+}
+
+.cycle-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1px solid var(--line-bright);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.cycle-stage.on .cycle-num {
+  background: var(--leaf);
+  border-color: var(--leaf);
+  color: #fff;
+}
+
+.cycle-gets {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.cycle-stage.on .cycle-gets {
+  color: var(--leaf);
+}
+
+.cycle-private {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 16px 14px;
+  background: #f2f8f4;
+  border-top: 1px solid var(--leaf-dim);
+}
+
+.cycle-hidden {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cycle-chip {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--leaf-dim);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+@media (max-width: 860px) {
+  .cycle-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cycle-stage + .cycle-stage::before {
+    display: none;
+  }
+}
+
+/* Stacked five deep, the diagram eats a whole phone screen. Lay each stage out on
+   one line instead — it still reads left to right, top to bottom. */
+@media (max-width: 460px) {
+  .cycle-track {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cycle-stage {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 2px 10px;
+    padding: 9px 14px 10px;
+  }
+
+  .cycle-what {
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .cycle-who {
+    grid-row: 1;
+  }
+
+  .cycle-gets {
+    grid-row: 2;
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .cycle-who {
+    grid-column: 1;
+  }
+
+  .cycle-what {
+    grid-row: 2;
+    grid-column: 1;
+  }
+}
+
+.split-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.split-body {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* The number is the point of the pane. Let it be the size of one. */
+.split-figure {
+  font-size: 27px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 3px;
+}
+
+.split-pane.private .split-figure {
+  color: var(--leaf);
+}
+
+.split-body code {
+  display: inline-block;
+  font-size: 12.5px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 6px;
+  color: var(--text-faint);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.split-list {
+  padding-left: 18px;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.split-list li {
+  margin-bottom: 4px;
+}
+
+/* ------------------------------------------------------------ commitment */
+
+.commit {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: 16px 18px 15px;
+  margin: 18px 0;
+  text-align: center;
+}
+
+.commit-in {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.commit-part {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 9px;
+}
+
+.commit-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 9px 0 8px;
+}
+
+.commit-arrow svg {
+  width: 11px;
+  height: 20px;
+}
+
+.commit-out {
+  font-family: var(--mono);
+  font-size: clamp(13px, 2.4vw, 17px);
+  letter-spacing: 0.02em;
+  color: var(--leaf);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.commit-note {
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-top: 9px;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- motion */
+
+/* A wave running left to right along the lifecycle, so the order of the five moves
+   is something the eye picks up rather than something the reader has to work out.
+   Three passes and then it rests: motion that never stops is decoration, and a page
+   somebody is going to read for several minutes should be still while they do.
+   Hovering the diagram plays it again for anyone who wants a second look. */
+.cycle-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #16a34a12, #16a34a04);
+  opacity: 0;
+  pointer-events: none;
+  animation: wave 5s ease-in-out 3;
+}
+
+.cycle:hover .cycle-stage::after {
+  animation-iteration-count: infinite;
+}
+
+.cycle-stage:nth-child(1)::after { animation-delay: 0s; }
+.cycle-stage:nth-child(2)::after { animation-delay: 0.35s; }
+.cycle-stage:nth-child(3)::after { animation-delay: 0.7s; }
+.cycle-stage:nth-child(4)::after { animation-delay: 1.05s; }
+.cycle-stage:nth-child(5)::after { animation-delay: 1.4s; }
+
+@keyframes wave {
+  0%, 40%, 100% { opacity: 0; }
+  8%, 20% { opacity: 1; }
+}
+
+/* Each tour step arrives rather than snapping in. Short enough not to be a wait. */
+.step-body {
+  animation: arrive 0.32s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Sparklines draw themselves once, which makes a flat line read as history rather
+   than as a rendering failure. */
+.spark polyline {
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: draw 1.5s ease-out 0.15s forwards;
+}
+
+.spark polygon {
+  opacity: 0;
+  animation: fade 0.9s ease-out 0.8s forwards;
+}
+
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fade { to { opacity: 0.12; } }
+
+.pill.live .dot.pulse {
+  animation: beat 2.4s ease-in-out infinite;
+}
+
+@keyframes beat {
+  0%, 100% { box-shadow: 0 0 0 0 #16a34a55; }
+  50% { box-shadow: 0 0 0 5px #16a34a00; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cycle-stage::after,
+  .step-body,
+  .spark polyline,
+  .spark polygon,
+  .pill.live .dot.pulse,
+  .hash.fresh {
+    animation: none;
+  }
+
+  .spark polyline { stroke-dashoffset: 0; }
+  .spark polygon { opacity: 0.12; }
+}
+
+.commit {
+  cursor: default;
+}
+
+.commit-replay {
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.commit:hover .commit-replay {
+  opacity: 1;
 }

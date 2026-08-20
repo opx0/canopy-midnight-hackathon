@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { runAction, type Job } from "../api.js";
+import { live, runAction, type Job } from "../api.js";
 
 export type ActionState = {
   run: (body: Record<string, unknown>) => Promise<Job | undefined>;
@@ -66,23 +66,43 @@ export function ActionFeedback({
   children?: React.ReactNode;
 }) {
   if (state.busy) {
+    // Midnight fees come out of a DUST balance that regenerates at a fixed rate, so a
+    // long wait here often is not proving at all — say which one it is.
+    const starved = live.fees?.waitingSince ? live.fees : undefined;
     return (
       <div className="working">
         <span className="spinner" />
-        <span>{busyLabel}…</span>
+        <span>
+          {starved
+            ? `Waiting for the fee wallet — Midnight regenerates DUST from registered NIGHT at a fixed rate, and this transaction costs more than has accrued${
+                starved.secondsToAfford
+                  ? `. About ${starved.secondsToAfford}s to go`
+                  : ""
+              }.`
+            : `${busyLabel}…`}
+        </span>
         <span className="elapsed">{seconds(state.elapsed)}</span>
       </div>
     );
   }
   if (state.error) {
+    // Three different things can go wrong and they mean opposite things. Two are the
+    // system working; the third is this deployment failing, and calling that a
+    // contract rejection would take credit for a bug.
     const unprovable = /no ownership proof can be constructed/.test(state.error);
+    const refused = /failed assert:/.test(state.error);
+    const message = state.error.replace(/^failed assert:\s*/, "");
     return (
-      <div className="rejected">
+      <div className={`rejected${unprovable || refused ? "" : " broken"}`}>
         <div className="rejected-head">
           <span>✕</span>{" "}
-          {unprovable ? "No valid proof exists" : "Rejected by the contract"}
+          {unprovable
+            ? "No valid proof exists"
+            : refused
+              ? "Rejected by the contract"
+              : "Canopy could not submit this"}
         </div>
-        <div className="rejected-msg">{state.error}</div>
+        <div className="rejected-msg">{message}</div>
         <div
           style={{
             fontSize: 12.5,
@@ -92,7 +112,9 @@ export function ActionFeedback({
         >
           {unprovable
             ? "Refused before a proof could even be built — there is nothing to submit."
-            : "Refused during local circuit execution. No transaction was submitted and nothing was spent."}
+            : refused
+              ? "Refused during local circuit execution. No transaction was submitted and nothing was spent."
+              : "This is a fault in this deployment, not a decision by the contract. Nothing was spent; try it again."}
         </div>
       </div>
     );

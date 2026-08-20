@@ -3,10 +3,14 @@ import type { ChainView, Disclosure, Meta, SessionView } from "../api.js";
 import { getDisclosure } from "../api.js";
 import { ActionFeedback, useAction } from "./Action.js";
 import { hash as short, seeded, tonnes } from "../format.js";
+import { type Stage } from "./Lifecycle.js";
+import Split from "./Split.js";
+import Commit from "./Commit.js";
 
 export const STEPS = [
   "The problem",
   "Supply",
+  "Trading",
   "Retirement",
   "The claim",
   "Cheating",
@@ -23,12 +27,36 @@ type Props = {
   refresh: () => void;
 };
 
+// Which move on the chain each step of the tour is about. App reads this to light up
+// the matching box in the lifecycle diagram at the top of the page.
+export const STAGE: (Stage | undefined)[] = [
+  undefined,
+  "issue",
+  "trade",
+  "retire",
+  "claim",
+  undefined,
+  "attest",
+  undefined,
+];
+
 export default function Tour(props: Props) {
   const { step } = props;
-  const Step = [Problem, Supply, Retirement, Claim, Cheating, Auditor, Recap][
-    step
-  ];
-  return <Step {...props} />;
+  const Step = [
+    Problem,
+    Supply,
+    Trading,
+    Retirement,
+    Claim,
+    Cheating,
+    Auditor,
+    Recap,
+  ][step];
+  return (
+    <div className="step-body" key={step}>
+      <Step {...props} />
+    </div>
+  );
 }
 
 const Next = ({
@@ -56,33 +84,41 @@ function Problem({ setStep, step, meta }: Props) {
     <>
       <h1>
         Carbon claims are checked by
-        <br />
+        <br className="wide-break" />{" "}
         trusting the company making them.
       </h1>
-      <p className="lede">
-        In 2022 crypto tried to fix carbon markets. Toucan bridged roughly 22
-        million Verra credits onto a public chain, and Verra responded by
-        banning tokenisation outright. The failure was architectural: a ledger
-        where everything is public exposes every company's position, and gives a
-        registry no way to stop a retired credit from trading on.
-      </p>
-      <p>
-        The pressure has not gone away. From <strong>September 2026</strong> the
-        EU Green Claims Directive makes unsubstantiated offset-based "climate
-        neutral" claims illegal, bans self-certification, and requires an
-        accredited external verifier. Companies must prove more, while their
-        emissions profile stays commercially sensitive.
-      </p>
+
+      <Split
+        who="the company"
+        chain={
+          <>
+            <div className="split-figure">Everything</div>
+            On an ordinary public ledger. Every credit you buy, every tonne you
+            retire, the whole position — visible to your competitors, forever.
+            That is why Verra banned tokenisation in 2022.
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">Everything</div>
+            Under today's rules. Nobody can check the claim, so it is taken on
+            trust — which the EU stops accepting in{" "}
+            <strong>September 2026</strong>.
+          </>
+        }
+      />
+
       <div className="note">
-        <strong>The contradiction:</strong> the public needs proof that a credit
-        was retired exactly once. The company needs its volumes kept private.
-        Ordinary ledgers can deliver one or the other. Canopy delivers both, on
-        Midnight.
+        <strong>Both are wrong.</strong> The public needs proof a credit was
+        retired exactly once. The company needs its volumes private. Ordinary
+        ledgers give you one or the other. Canopy gives both, and the diagram
+        above is how.
       </div>
-      <p>
-        Everything you are about to do writes to a real contract on the Midnight{" "}
-        <strong>{meta?.network ?? "testnet"}</strong> network. No wallet, no
-        extension, no signup.
+
+      <p className="faint">
+        Everything you are about to do writes to a real contract on Midnight{" "}
+        <strong>{meta?.network ?? "testnet"}</strong>. No wallet, no extension,
+        no signup.
       </p>
       <Next setStep={setStep} step={step} label="Start" />
     </>
@@ -96,16 +132,9 @@ function Supply({ setStep, step, session, chain, meta, refresh }: Props) {
   return (
     <>
       <h2>A registry publishes what it issued.</h2>
-      <p>
-        {meta?.project.name} has issued{" "}
-        {tonnes(meta?.project.tonnes ?? 0)} tonnes for vintage{" "}
-        {meta?.project.vintage}. That supply is public — it is the whole point
-        of a registry. What stays private is who ends up holding each credit.
-      </p>
-      <p>
-        Each credit enters the chain as a <strong>commitment</strong>: a hash of
-        its serial, its size, its owner and a blinding salt. Issue one more and
-        watch the counter on the right.
+      <p className="lede">
+        Supply is public — that is what a registry is for. Who ends up holding
+        each credit is not.
       </p>
 
       <div className="row">
@@ -123,35 +152,127 @@ function Supply({ setStep, step, session, chain, meta, refresh }: Props) {
 
       <ActionFeedback state={action}>
         <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
-          The chain stored{" "}
-          <code>{short(String(action.result?.result?.commitment ?? ""))}</code>.
           Nothing in that hash says "EcoCorp" or "400".
         </div>
       </ActionFeedback>
 
-      <div className="split">
-        <div className="split-pane">
-          <div className="split-title">What the chain sees</div>
-          {chain?.retiredNullifiers !== undefined && (
-            <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
-              {chain.issuedCredits} opaque commitments, and a batch header
-              saying {tonnes(chain.batches[0]?.tonnes ?? 0)} t exists.
+      <Commit tonnes="400 t" />
+
+      <Split
+        who="EcoCorp"
+        chain={
+          <>
+            <div className="split-figure">
+              {chain?.issuedCredits ?? 0} hashes
             </div>
-          )}
-        </div>
-        <div className="split-pane private">
-          <div className="split-title">What EcoCorp sees</div>
-          <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
-            {eco?.credits.length ?? 0} credits it can spend, worth{" "}
-            {tonnes(
-              eco?.credits.reduce((sum, c) => sum + Number(c.tonnes), 0) ?? 0,
-            )}{" "}
-            t in total.
-          </div>
-        </div>
-      </div>
+            And a batch header saying{" "}
+            {tonnes(meta?.projects[0]?.tonnes ?? 0)} tonnes of{" "}
+            {meta?.projects[0]?.name} exist. Not one of them says who holds
+            what.
+            <code>
+              {short(String(action.result?.result?.commitment ?? "hash(serial ‖ tonnes ‖ owner ‖ salt)"))}
+            </code>
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">
+              {tonnes(
+                eco?.credits.reduce((sum, c) => sum + Number(c.tonnes), 0) ?? 0,
+              )}{" "}
+              t
+            </div>
+            Across {eco?.credits.length ?? 0} credits it can actually spend.
+            Only EcoCorp can open those hashes, because only EcoCorp has the
+            salt and the key.
+          </>
+        }
+      />
 
       <Next setStep={setStep} step={step} />
+    </>
+  );
+}
+
+function Trading({ setStep, step, session, chain, refresh }: Props) {
+  const action = useAction(session?.id, refresh);
+  const eco = session?.companies.find((c) => c.role === "ecocorp");
+  const fraud = session?.companies.find((c) => c.role === "fraudcorp");
+  const sendable = eco?.credits.find((c) => !c.retired && !c.transferred);
+  const moved = (chain?.transferEvents ?? 0) > 0;
+
+  return (
+    <>
+      <h2>Credits change hands before anyone retires them.</h2>
+      <p className="lede">
+        On a public ledger every trade names the buyer, the seller and the size.
+        Here it names none of them.
+      </p>
+
+      <div className="row">
+        <button
+          className="btn"
+          disabled={action.busy || !sendable}
+          onClick={() =>
+            void action.run({
+              action: "transfer",
+              role: "ecocorp",
+              to: "fraudcorp",
+              serial: sendable?.serial,
+            })
+          }
+        >
+          {sendable
+            ? `Send ${tonnes(sendable.tonnes)} t to ${fraud?.name ?? "the other company"}`
+            : "Nothing left to send"}
+        </button>
+        <span style={{ color: "var(--text-faint)", fontSize: 13 }}>
+          {chain?.transferEvents ?? 0} credits have changed hands
+        </span>
+      </div>
+
+      <ActionFeedback state={action}>
+        <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
+          Nullifier{" "}
+          <code>{short(String(action.result?.result?.nullifier ?? ""))}</code>{" "}
+          burnt the seller's note. The buyer's replacement went in as a
+          commitment nobody can link to it.
+        </div>
+      </ActionFeedback>
+
+      <Split
+        who="the two parties"
+        chain={
+          <>
+            <div className="split-figure">1 spent · 1 created</div>
+            A nullifier and a fresh commitment, in the same transaction. They
+            cannot be matched to each other — the new one carries a new blinding
+            value. No buyer, no seller, no price, no size.
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">450 t, moved</div>
+            The seller loses a spendable credit. The buyer gains one worth
+            exactly the same tonnage and can now retire it. Same serial, new
+            owner.
+          </>
+        }
+      />
+
+      <div className="note">
+        <strong>The seller cannot keep it too.</strong> They still know the
+        serial, the size and the salt — everything a proof needs — but the
+        nullifier is spent, so the circuit will not build a second one. You can
+        try that yourself two steps from here.
+      </div>
+
+      <Next
+        setStep={setStep}
+        step={step}
+        disabled={!moved}
+        label={moved ? "Continue" : "Send one to continue"}
+      />
     </>
   );
 }
@@ -165,15 +286,9 @@ function Retirement({ setStep, step, session, refresh }: Props) {
   return (
     <>
       <h2>Retiring a credit tells the world almost nothing.</h2>
-      <p>
-        Retiring is the moment a credit is consumed to offset emissions. It must
-        be impossible to do twice — and it should not broadcast how much a
-        company is offsetting.
-      </p>
-      <p>
-        Pick one. The contract proves the credit was really issued, proves
-        EcoCorp owns it, and publishes a <strong>nullifier</strong> derived from
-        the credit and EcoCorp's secret key.
+      <p className="lede">
+        The moment a credit is consumed. It has to be impossible to do twice,
+        and it should not announce how much you are offsetting.
       </p>
 
       <div className="list">
@@ -217,11 +332,28 @@ function Retirement({ setStep, step, session, refresh }: Props) {
         </div>
       </ActionFeedback>
 
-      <div className="note">
-        <strong>What the chain just learned:</strong> that some credit, somewhere
-        in the tree, was retired. Not which one. Not by whom. Not how many
-        tonnes.
-      </div>
+      <Split
+        who="EcoCorp"
+        chain={
+          <>
+            <div className="split-figure">+1 nullifier</div>
+            That some credit, somewhere in the tree, was retired. Not which one.
+            Not by whom. Not how many tonnes. Inserting the same one twice is
+            what the contract refuses — so double counting has no transaction
+            that expresses it.
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">
+              {tonnes(eco?.retiredTonnes ?? 0)} t
+            </div>
+            Its real running total, sealed into a commitment on chain that only
+            its own key can reopen. Nobody else can read it, and EcoCorp cannot
+            later change it.
+          </>
+        }
+      />
 
       <Next
         setStep={setStep}
@@ -243,15 +375,11 @@ function Claim({ setStep, step, session, refresh }: Props) {
   return (
     <>
       <h2>A claim proves a floor, not a figure.</h2>
-      <p>
-        EcoCorp has actually retired <strong>{tonnes(actual)} tonnes</strong> —
-        a number only it can read. To satisfy a regulator it publishes a claim
-        of the form "in this period we retired at least N tonnes", backed by a
-        zero-knowledge proof against its sealed tally.
-      </p>
-      <p>
-        Choose the number yourself. The contract will only accept a claim it can
-        actually cover, so try one that is too large and watch it fail.
+      <p className="lede">
+        EcoCorp retired <strong>{tonnes(actual)} tonnes</strong> — a number only
+        it can read. It publishes a floor instead, proved against the sealed
+        tally. Drag it past what it actually retired and the proof cannot be
+        built.
       </p>
 
       <div className="card flat" style={{ padding: "18px 0" }}>
@@ -327,16 +455,18 @@ function Cheating({ setStep, step, session, refresh }: Props) {
   const doubleSpend = useAction(session?.id, refresh);
   const overclaim = useAction(session?.id, refresh);
   const theft = useAction(session?.id, refresh);
+  const resell = useAction(session?.id, refresh);
 
   const eco = session?.companies.find((c) => c.role === "ecocorp");
   const retired = eco?.credits.find((c) => c.retired);
-  const held = eco?.credits.find((c) => !c.retired);
+  const held = eco?.credits.find((c) => !c.retired && !c.transferred);
+  const sent = eco?.credits.find((c) => c.transferred && !c.retired);
 
   return (
     <>
       <h2>Now try to cheat.</h2>
       <p>
-        These are the three frauds that matter in carbon markets. None of them
+        These are the four frauds that matter in carbon markets. None of them
         is caught by a rule engine or an audit after the fact — each one is
         simply unprovable, so no transaction can exist.
       </p>
@@ -413,6 +543,31 @@ function Cheating({ setStep, step, session, refresh }: Props) {
         <ActionFeedback state={theft} />
       </div>
 
+      <div className="card">
+        <h3>4 · Sell it and retire it anyway</h3>
+        <p style={{ fontSize: 14, marginBottom: 12 }}>
+          The oldest trick in offsetting: bank the sale, then claim the tonnes
+          as your own. EcoCorp still holds the note it sent away, and it opens
+          to the same commitment it always did.
+        </p>
+        <button
+          className="btn danger"
+          disabled={resell.busy || !sent}
+          onClick={() =>
+            void resell.run({
+              action: "retire",
+              role: "ecocorp",
+              serial: sent?.serial,
+            })
+          }
+        >
+          {sent
+            ? `Retire the ${tonnes(sent.tonnes)} t it already sold`
+            : "Send a credit in step 3 first"}
+        </button>
+        <ActionFeedback state={resell} />
+      </div>
+
       <Next setStep={setStep} step={step} />
     </>
   );
@@ -426,12 +581,11 @@ function Auditor({ setStep, step, session, chain, refresh }: Props) {
   return (
     <>
       <h2>The auditor sees everything. The public still sees nothing.</h2>
-      <p>
-        The Green Claims Directive requires an accredited verifier with no
-        financial interest in the outcome. So EcoCorp hands that verifier the
-        openings behind its retirements — serials, sizes, salts. The auditor
-        recomputes each commitment and each nullifier and checks them against
-        the chain.
+      <p className="lede">
+        The Green Claims Directive requires an accredited verifier. EcoCorp
+        hands that one verifier the openings — serials, sizes, salts — and they
+        recompute every commitment against the chain. Nobody else gets a line of
+        it.
       </p>
 
       <div className="row" style={{ marginBottom: 16 }}>
@@ -462,6 +616,8 @@ function Auditor({ setStep, step, session, chain, refresh }: Props) {
               <div style={{ width: 76 }}>
                 {record.retired ? (
                   <span className="tag retired">verified</span>
+                ) : record.transferred ? (
+                  <span className="tag held">passed on</span>
                 ) : (
                   <span className="tag held">held</span>
                 )}
@@ -470,6 +626,25 @@ function Auditor({ setStep, step, session, chain, refresh }: Props) {
           ))}
         </div>
       )}
+
+      <Split
+        who="the auditor"
+        chain={
+          <>
+            <div className="split-figure">1 flag</div>
+            An attestation against the claim, signed by the key fixed when the
+            contract was deployed. That is the entire public record of this
+            audit.
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">Every line</div>
+            Serials, tonnages and salts for each retirement, checked against the
+            chain. Handed over off-chain, the way a real audit works.
+          </>
+        }
+      />
 
       <p>
         Satisfied, the auditor attests on chain. That attestation is the only
@@ -502,31 +677,45 @@ function Recap({ setStep, chain, meta, session }: Props) {
   return (
     <>
       <h2>What just happened</h2>
-      <p>
-        You published a verifiable carbon claim and audited it, and the chain
+      <p className="lede">
+        You published a verifiable carbon claim and had it audited. The chain
         never learned a single commercially sensitive number.
       </p>
 
-      <div className="split">
-        <div className="split-pane">
-          <div className="split-title">Public, forever</div>
-          <ul style={{ paddingLeft: 18, color: "var(--text-dim)", fontSize: 14 }}>
-            <li>{chain?.issuedCredits ?? 0} credit commitments</li>
-            <li>{chain?.retirementEvents ?? 0} retirement nullifiers</li>
-            <li>{chain?.claims.length ?? 0} claims, with attestations</li>
-            <li>Which registry and auditor are authoritative</li>
-          </ul>
-        </div>
-        <div className="split-pane private">
-          <div className="split-title">Never disclosed</div>
-          <ul style={{ paddingLeft: 18, color: "var(--text-dim)", fontSize: 14 }}>
-            <li>That EcoCorp retired {tonnes(eco?.retiredTonnes ?? 0)} t</li>
-            <li>Which credits it used</li>
-            <li>What it still holds</li>
-            <li>Anything about its emissions profile</li>
-          </ul>
-        </div>
-      </div>
+      <Split
+        who="EcoCorp"
+        chain={
+          <>
+            <div className="split-figure">
+              {(chain?.issuedCredits ?? 0) +
+                (chain?.retirementEvents ?? 0) +
+                (chain?.transferEvents ?? 0)}{" "}
+              hashes
+            </div>
+            <ul className="split-list">
+              <li>{chain?.issuedCredits ?? 0} credit commitments</li>
+              <li>{chain?.retirementEvents ?? 0} retirement nullifiers</li>
+              <li>{chain?.transferEvents ?? 0} credits that changed hands</li>
+              <li>{chain?.claims.length ?? 0} claims, with attestations</li>
+              <li>Which registry and auditor are authoritative</li>
+            </ul>
+          </>
+        }
+        only={
+          <>
+            <div className="split-figure">
+              {tonnes(eco?.retiredTonnes ?? 0)} t
+            </div>
+            <ul className="split-list">
+              <li>The real total, sealed and unreadable</li>
+              <li>Which credits it used</li>
+              <li>What it still holds</li>
+              <li>Who it bought from and sold to</li>
+              <li>Anything about its emissions profile</li>
+            </ul>
+          </>
+        }
+      />
 
       <h3 style={{ marginTop: 28 }}>Why this needs Midnight</h3>
       <p>
@@ -543,8 +732,8 @@ function Recap({ setStep, chain, meta, session }: Props) {
         <strong>Honest limits.</strong> Canopy fixes carbon <em>accounting</em>,
         not carbon <em>quality</em> — a worthless credit accounted for perfectly
         is still worthless. The registry and auditor are trusted roles, as they
-        are in the real market. Credits are issued to a holder and retired by
-        them; secondary trading is not modelled yet.
+        are in the real market. Trading has no settlement leg: a credit moves
+        when the seller says so, and payment is somebody else's problem.
       </div>
 
       <div className="row">

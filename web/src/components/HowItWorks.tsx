@@ -1,10 +1,11 @@
 import type { Meta } from "../api.js";
+import Commit from "./Commit.js";
 
 export default function HowItWorks({ meta }: { meta?: Meta }) {
   return (
     <>
       <p className="lede">
-        Canopy is one Compact contract. Three mechanisms do all the work, and
+        Canopy is one Compact contract. Four mechanisms do all the work, and
         each one exists to make a specific kind of lie impossible.
       </p>
 
@@ -15,6 +16,7 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
         <pre className="code-block">
           commitment = hash(serial ‖ tonnes ‖ ownerKey ‖ salt)
         </pre>
+        <Commit />
         <p style={{ fontSize: 14.5 }}>
           The registry inserts this into a public Merkle tree. Anyone can audit
           how much supply exists; nobody can see who holds a given credit or how
@@ -25,9 +27,9 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
       </div>
 
       <div className="card">
-        <h3>2 · Retirement publishes a nullifier, not a serial</h3>
+        <h3>2 · Spending publishes a nullifier, not a serial</h3>
         <pre className="code-block">
-          nullifier = hash("canopy:retire:" ‖ serial ‖ ownerSecretKey)
+          nullifier = hash("canopy:spend:" ‖ commitment ‖ ownerSecretKey)
         </pre>
         <p style={{ fontSize: 14.5 }}>
           Because the owner's secret is an input, the nullifier is{" "}
@@ -40,6 +42,15 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
           This is the centre of the design. Double counting is not something
           Canopy detects afterwards by reconciling records — there is no
           transaction that expresses it.
+        </div>
+        <div className="note">
+          <strong>Why the commitment and not the serial.</strong> A serial
+          outlives a transfer; a commitment does not. Keying the nullifier to
+          the serial would let the first holder spend a note the second one now
+          owns — and once that hole is closed by binding the sender's key in,
+          the same credit coming back to a previous holder would be permanently
+          unspendable. Keying it to the commitment gives every note exactly one
+          nullifier, for its whole life, in one owner's hands.
         </div>
         <div className="note" style={{ marginBottom: 0 }}>
           <strong>Not even the registry can follow a credit.</strong> It knows
@@ -69,6 +80,33 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
         </p>
       </div>
 
+      <div className="card">
+        <h3>4 · A trade is a spend and a re-issue</h3>
+        <pre className="code-block">
+          spend(old note) → nullifier · insert hash(serial ‖ tonnes ‖ newOwner ‖
+          freshSalt)
+        </pre>
+        <p style={{ fontSize: 14.5 }}>
+          Carbon credits change hands before they are retired, and the market
+          Verra shut down was shut down partly because that trail was public.
+          Here a transfer burns the seller's note and plants a fresh commitment
+          for the buyer. The chain records one nullifier and one new leaf.
+        </p>
+        <p style={{ fontSize: 14.5 }}>
+          The buyer is never written down — only a commitment to them is, under
+          a new blinding value, so the incoming leaf cannot be matched to the
+          outgoing nullifier. Tonnage cannot change on the way: the old note had
+          to open against the tree, which binds its size, and the new commitment
+          is built from the same value inside the circuit.
+        </p>
+        <div className="note" style={{ marginBottom: 0 }}>
+          The note that opens the new commitment travels off-chain, the way a
+          shielded memo or an ordinary settlement message would. On this site
+          that means the server hands it over; the contract neither knows nor
+          cares how it arrived.
+        </div>
+      </div>
+
       <h2 style={{ marginTop: 32 }}>The contract, as written</h2>
       <p>
         The whole protocol is about 200 lines of Compact. This is the public
@@ -76,6 +114,7 @@ export default function HowItWorks({ meta }: { meta?: Meta }) {
       </p>
       <pre className="code-block source">{`export ledger creditTree: HistoricMerkleTree<10, Bytes<32>>;
 export ledger retiredCredits: Set<Bytes<32>>;
+export ledger transferredCredits: Set<Bytes<32>>;
 export ledger batches: Map<Bytes<32>, Batch>;
 export ledger companies: Map<Bytes<32>, Bytes<32>>;
 export ledger claims: Map<Bytes<32>, Claim>;
@@ -83,7 +122,8 @@ export ledger registryKey: Bytes<32>;
 export ledger auditorKey: Bytes<32>;
 export ledger issuedTonnes: Uint<64>;
 export ledger issuedCredits: Counter;
-export ledger retirementEvents: Counter;`}</pre>
+export ledger retirementEvents: Counter;
+export ledger transferEvents: Counter;`}</pre>
       <p>
         No tonnage per company, no serial, no owner. And this is everything the
         prover supplies privately — inputs to the proof, never to the chain:
@@ -153,9 +193,11 @@ assert(
         <strong>What Canopy does not solve.</strong> It fixes carbon{" "}
         <em>accounting</em>, not carbon <em>quality</em>: a worthless credit
         accounted for perfectly is still worthless. The registry and auditor are
-        trusted keys, as they are in the real market. Secondary trading is not
-        modelled. And while volumes stay private, an observer can still count
-        how many retirement transactions a company made.
+        trusted keys, as they are in the real market. Trading is peer to peer with
+        no settlement leg — a credit moves when the seller says so, and payment
+        is somebody else's problem. And while volumes stay private, an observer
+        can still count how many transactions a company made, and the credit
+        tree holds 1,024 notes per deployment, issues and transfers together.
       </div>
 
       {meta && (
@@ -208,7 +250,7 @@ function Diagram() {
         nullifier set
       </text>
       <text x="275" y="79" fill="#61756a" fontSize="11" textAnchor="middle">
-        retired, exactly once
+        spent, exactly once
       </text>
 
       <rect x="380" y="38" width="150" height="54" rx="8" fill="#111815" stroke="#2c3d34" />

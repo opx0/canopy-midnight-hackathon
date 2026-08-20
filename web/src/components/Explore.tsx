@@ -13,6 +13,10 @@ type Props = {
 
 type Role = "registry" | "ecocorp" | "fraudcorp" | "auditor";
 
+// Used before a sandbox exists, so the panels read properly while writing is paused
+// rather than showing "'s private credit ledger".
+const NAMES = { ecocorp: "EcoCorp", fraudcorp: "FraudCorp" } as const;
+
 const ROLES: { key: Role; label: string; blurb: string }[] = [
   {
     key: "registry",
@@ -49,6 +53,13 @@ export default function Explore(props: Props) {
         simulated, and nothing is off limits — including everything that is
         supposed to fail.
       </p>
+      {!props.session && (
+        <p className="faint">
+          The controls unlock once you have your own company keys on the
+          contract. Everything they would show you is already in the chain
+          inspector.
+        </p>
+      )}
       <nav className="tabs">
         {ROLES.map((entry) => (
           <button
@@ -76,14 +87,18 @@ function RegistryPanel({ session, chain, meta, refresh }: Props) {
   const action = useAction(session?.id, refresh);
   const [size, setSize] = useState(500);
   const [target, setTarget] = useState<"ecocorp" | "fraudcorp">("ecocorp");
+  const [project, setProject] = useState("");
+  const chosen =
+    meta?.projects.find((entry) => entry.key === project) ?? meta?.projects[0];
 
   return (
     <>
       <div className="card">
         <h3>Issue a credit</h3>
         <p className="hint">
-          From {meta?.project.name}, vintage {meta?.project.vintage}. The chain
-          receives a commitment; the recipient receives the note that opens it.
+          The chain receives a commitment; the recipient receives the note that
+          opens it. Vintage {chosen?.vintage}, {tonnes(chosen?.tonnes ?? 0)}{" "}
+          tonnes of registered supply to draw from.
         </p>
         <div className="row" style={{ marginBottom: 14 }}>
           <input
@@ -96,8 +111,20 @@ function RegistryPanel({ session, chain, meta, refresh }: Props) {
             style={{ width: 110 }}
           />
           <span style={{ color: "var(--text-faint)", fontSize: 14 }}>
-            tonnes to
+            tonnes from
           </span>
+          <select
+            value={chosen?.key ?? ""}
+            onChange={(event) => setProject(event.target.value)}
+            className="field"
+          >
+            {meta?.projects.map((entry) => (
+              <option key={entry.key} value={entry.key}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+          <span style={{ color: "var(--text-faint)", fontSize: 14 }}>to</span>
           <select
             value={target}
             onChange={(event) =>
@@ -113,7 +140,12 @@ function RegistryPanel({ session, chain, meta, refresh }: Props) {
           className="btn"
           disabled={action.busy || !seeded(session)}
           onClick={() =>
-            void action.run({ action: "issue", role: target, tonnes: size })
+            void action.run({
+              action: "issue",
+              role: target,
+              tonnes: size,
+              project: chosen?.key,
+            })
           }
         >
           Issue credit
@@ -151,6 +183,7 @@ function CompanyPanel({
   role,
 }: Props & { role: "ecocorp" | "fraudcorp" }) {
   const retire = useAction(session?.id, refresh);
+  const transfer = useAction(session?.id, refresh);
   const claim = useAction(session?.id, refresh);
   const [threshold, setThreshold] = useState(500);
   const company = session?.companies.find((entry) => entry.role === role);
@@ -158,11 +191,19 @@ function CompanyPanel({
   const claims = chain?.claims.filter(
     (entry) => entry.company === company?.publicKey,
   );
+  const sentAway = company?.credits.find(
+    (credit) => credit.transferred && !credit.retired,
+  );
+  // A credit the other company already sent us is one we do own, and retiring it
+  // would succeed — which would turn the fraud demonstration into a lie.
+  const stealable = other?.credits.find(
+    (credit) => !credit.retired && !credit.transferred,
+  );
 
   return (
     <>
       <div className="card">
-        <h3>{company?.name}'s private credit ledger</h3>
+        <h3>{company?.name ?? NAMES[role]}'s private credit ledger</h3>
         <p className="hint">
           Visible to this company alone. The chain holds only commitments to
           these rows.
@@ -177,20 +218,40 @@ function CompanyPanel({
                 </div>
                 {credit.retired ? (
                   <span className="tag retired">retired</span>
+                ) : credit.transferred ? (
+                  <span className="tag held">passed on</span>
                 ) : (
-                  <button
-                    className="btn small ghost"
-                    disabled={retire.busy || !seeded(session)}
-                    onClick={() =>
-                      void retire.run({
-                        action: "retire",
-                        role,
-                        serial: credit.serial,
-                      })
-                    }
-                  >
-                    Retire
-                  </button>
+                  <>
+                    {other && (
+                      <button
+                        className="btn small ghost"
+                        disabled={transfer.busy || !seeded(session)}
+                        onClick={() =>
+                          void transfer.run({
+                            action: "transfer",
+                            role,
+                            to: other.role,
+                            serial: credit.serial,
+                          })
+                        }
+                      >
+                        Send to {other.name}
+                      </button>
+                    )}
+                    <button
+                      className="btn small ghost"
+                      disabled={retire.busy || !seeded(session)}
+                      onClick={() =>
+                        void retire.run({
+                          action: "retire",
+                          role,
+                          serial: credit.serial,
+                        })
+                      }
+                    >
+                      Retire
+                    </button>
+                  </>
                 )}
               </div>
             ))}
@@ -201,6 +262,13 @@ function CompanyPanel({
           </div>
         )}
         <ActionFeedback state={retire} />
+        <ActionFeedback state={transfer} />
+        <div className="note">
+          Sending a credit spends the note and mints a fresh one for the
+          recipient — same serial, same tonnage, new owner, new blinding. The
+          chain sees one nullifier and one commitment, and neither says who was
+          on either end. Nothing here reveals the size of the trade.
+        </div>
         <div className="note" style={{ marginBottom: 0 }}>
           Retired so far: <strong>{tonnes(company?.retiredTonnes ?? 0)} t</strong>
           . This total exists only here and inside the proof — the chain stores a
@@ -208,12 +276,14 @@ function CompanyPanel({
         </div>
       </div>
 
-      {other && other.credits.some((credit) => !credit.retired) && (
+      {other && stealable && (
         <div className="card">
           <h3>Try to spend a credit you do not own</h3>
           <p className="hint">
             {other.name} holds credits whose serials are visible to you in this
-            demo. Attempt one.
+            demo. Attempt one — this is {short(stealable.serial)}, worth{" "}
+            {tonnes(stealable.tonnes)} t, and you cannot open its commitment
+            with your key.
           </p>
           <button
             className="btn danger"
@@ -222,11 +292,35 @@ function CompanyPanel({
               void retire.run({
                 action: "retire",
                 role,
-                serial: other.credits.find((credit) => !credit.retired)?.serial,
+                serial: stealable.serial,
               })
             }
           >
             Retire {other.name}'s credit
+          </button>
+        </div>
+      )}
+
+      {sentAway && (
+        <div className="card">
+          <h3>Try to retire a credit you already sent away</h3>
+          <p className="hint">
+            You still know the serial, the tonnage and the salt of the note you
+            passed on — everything a proof needs. The nullifier is already in
+            the chain's transfer set, so the circuit will not prove it twice.
+          </p>
+          <button
+            className="btn danger"
+            disabled={retire.busy || !seeded(session)}
+            onClick={() =>
+              void retire.run({
+                action: "retire",
+                role,
+                serial: sentAway.serial,
+              })
+            }
+          >
+            Retire it anyway
           </button>
         </div>
       )}
@@ -347,6 +441,8 @@ function AuditorPanel({ session, chain, refresh }: Props) {
                   <div style={{ width: 84 }}>
                     {record.retired ? (
                       <span className="tag retired">retired</span>
+                    ) : record.transferred ? (
+                      <span className="tag held">passed on</span>
                     ) : (
                       <span className="tag held">held</span>
                     )}

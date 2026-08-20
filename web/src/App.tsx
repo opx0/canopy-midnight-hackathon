@@ -14,12 +14,34 @@ import {
 } from "./api.js";
 import Live from "./components/Live.js";
 import ChainInspector from "./components/ChainInspector.js";
-import Tour, { STEPS } from "./components/Tour.js";
+import Tour, { STEPS, STAGE } from "./components/Tour.js";
+import Lifecycle from "./components/Lifecycle.js";
 import Explore from "./components/Explore.js";
 import HowItWorks from "./components/HowItWorks.js";
+import Benchmarks from "./components/Benchmarks.js";
+import Trend from "./components/Trend.js";
+import Verify from "./components/Verify.js";
 import Seeding from "./components/Seeding.js";
 
 const SESSION_KEY = "canopy.session";
+
+const REPO = "https://github.com/opx0/canopy-midnight-hackathon";
+
+// Tabs live in the URL so a judge can send somebody a link to the part that matters,
+// and so the back button does what they expect.
+type Tab = "tour" | "explore" | "how" | "bench";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "tour", label: "Guided tour" },
+  { key: "explore", label: "Explore freely" },
+  { key: "how", label: "How it works" },
+  { key: "bench", label: "What it costs" },
+];
+
+const tabFromHash = (): Tab => {
+  const found = TABS.find((tab) => tab.key === location.hash.replace("#", ""));
+  return found?.key ?? "tour";
+};
 
 export default function App() {
   const [meta, setMeta] = useState<Meta>();
@@ -27,15 +49,23 @@ export default function App() {
   const [chain, setChain] = useState<ChainView>();
   const [sessionId, setSessionId] = useState<string>();
   const [step, setStep] = useState(0);
-  const [tab, setTab] = useState<"tour" | "explore" | "how">("tour");
-  const [fatal, setFatal] = useState<string>();
+  const [tab, setTabState] = useState<Tab>(tabFromHash);
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    window.history.replaceState(null, "", next === "tour" ? "." : `#${next}`);
+  };
+  const [sandboxError, setSandboxError] = useState<string>();
   const [status, setStatus] = useState<Status>();
   const [history, setHistory] = useState<History>();
 
-  const started = useRef(false);
+  // A sandbox costs four real transactions, and Midnight regenerates the DUST that
+  // pays for them at a fixed rate — so it is not free to hand one to somebody who
+  // came to read. Wait until they do something that needs one.
+  const wanted = tab === "explore" || step > 0;
+  const claiming = useRef(false);
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    if (!wanted || !status?.ready || sessionId || claiming.current) return;
+    claiming.current = true;
 
     const resumeOrCreate = async (): Promise<string> => {
       const saved = localStorage.getItem(SESSION_KEY);
@@ -51,21 +81,19 @@ export default function App() {
       return id;
     };
 
-    const run = async () => {
-      for (;;) {
-        const current = await getStatus().catch(() => undefined);
-        setStatus(current);
-        getMeta().then(setMeta).catch(() => undefined);
-        if (current?.ready) break;
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-      setSessionId(await resumeOrCreate());
-    };
+    resumeOrCreate().then(setSessionId, (error: Error) => {
+      // Not fatal. The contract, the inspector and every explanation on this page
+      // work without a sandbox; only the buttons need one.
+      claiming.current = false;
+      setSandboxError(error.message);
+    });
+  }, [wanted, status?.ready, sessionId]);
 
-    run().catch((error: Error) => setFatal(error.message));
-  }, []);
-
+  // One poller. It runs from first paint, so a visitor who arrives while the backend
+  // is restarting sees the panels fill in on their own rather than a dead page.
   const refresh = useCallback(() => {
+    getStatus().then(setStatus).catch(() => undefined);
+    getMeta().then(setMeta).catch(() => undefined);
     getChain().then(setChain).catch(() => undefined);
     getHistory().then(setHistory).catch(() => undefined);
     if (sessionId) getSession(sessionId).then(setSession).catch(() => undefined);
@@ -76,17 +104,6 @@ export default function App() {
     const timer = setInterval(refresh, 4000);
     return () => clearInterval(timer);
   }, [refresh]);
-
-  if (fatal) {
-    return (
-      <div className="main">
-        <h2>Canopy is not reachable</h2>
-        <p>
-          The backend did not answer: <code>{fatal}</code>
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="app">
@@ -99,27 +116,36 @@ export default function App() {
           </div>
         </header>
 
+        {/* The picture first. Somebody who reads nothing else should still be able
+            to say what this does, and the numbers underneath are the evidence that
+            it is really doing it. */}
+        <Lifecycle active={tab === "tour" ? STAGE[step] : undefined} />
+
         <Live history={history} chain={chain} meta={meta} status={status} />
 
+        {status && !status.ready && meta?.contractAddress && (
+          <div className="paused">
+            <strong>Writing to the chain is paused</strong> while the server is{" "}
+            {status.stage ?? "starting up"}
+            {status.stageSeconds ? `, ${status.stageSeconds}s so far` : ""}.
+            Everything you can see is live contract state read from Midnight's
+            public indexer, and every page here works — the buttons come back
+            when the fee wallet does.
+          </div>
+        )}
+
+        <Trend history={history} />
+
         <nav className="tabs">
-          <button
-            className={`tab${tab === "tour" ? " active" : ""}`}
-            onClick={() => setTab("tour")}
-          >
-            Guided tour
-          </button>
-          <button
-            className={`tab${tab === "explore" ? " active" : ""}`}
-            onClick={() => setTab("explore")}
-          >
-            Explore freely
-          </button>
-          <button
-            className={`tab${tab === "how" ? " active" : ""}`}
-            onClick={() => setTab("how")}
-          >
-            How it works
-          </button>
+          {TABS.map((entry) => (
+            <button
+              key={entry.key}
+              className={`tab${tab === entry.key ? " active" : ""}`}
+              onClick={() => setTab(entry.key)}
+            >
+              {entry.label}
+            </button>
+          ))}
         </nav>
 
         {tab === "tour" && (
@@ -131,7 +157,6 @@ export default function App() {
                   index < step ? " done" : ""
                 }`}
                 onClick={() => setStep(index)}
-                disabled={!sessionId && index > 0}
               >
                 <span className="step-num">{index < step ? "✓" : index + 1}</span>
                 {label}
@@ -140,24 +165,28 @@ export default function App() {
           </div>
         )}
 
-        {tab !== "how" && <Seeding session={session} />}
-
-        {tab === "how" && <HowItWorks meta={meta} />}
-
-        {tab === "explore" && !sessionId && (
-          <div className="working">
-            <span className="spinner" />
-            <span>
-              {status && !status.ready
-                ? "The fee wallet is arming, so writing to the chain is paused for a moment. Everything to the right is the live contract, read straight from the indexer, and How it works explains the cryptography."
-                : `Preparing a private sandbox on Midnight ${meta?.network ?? "testnet"}…`}
-            </span>
+        {sandboxError && !sessionId && (
+          <div className="rejected broken">
+            <div className="rejected-head">
+              <span>✕</span> Could not give you a sandbox
+            </div>
+            <div className="rejected-msg">{sandboxError}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-faint)", marginTop: 10 }}>
+              Only the buttons need one. The chain inspector, How it works and
+              What it costs are all still live.
+            </div>
           </div>
         )}
 
+        {(tab === "tour" || tab === "explore") && <Seeding session={session} />}
+
+        {tab === "how" && <HowItWorks meta={meta} />}
+
+        {tab === "bench" && <Benchmarks />}
+
         {tab === "tour" && (
           <Tour
-            step={sessionId ? step : 0}
+            step={step}
             setStep={setStep}
             session={session}
             chain={chain}
@@ -166,7 +195,7 @@ export default function App() {
           />
         )}
 
-        {tab === "explore" && sessionId && (
+        {tab === "explore" && (
           <Explore
             session={session}
             chain={chain}
@@ -174,6 +203,34 @@ export default function App() {
             refresh={refresh}
           />
         )}
+        <Verify />
+
+        <footer className="site-foot">
+          <div>
+            <a href={REPO}>Source on GitHub</a> · one Compact contract, a Node
+            backend and this page.
+          </div>
+          <div>
+            <a href={`${REPO}/blob/main/contract/src/canopy.compact`}>
+              canopy.compact
+            </a>{" "}
+            is the whole protocol, about 200 lines, and is the file worth
+            reading first.
+          </div>
+          <div>
+            <a href={`${REPO}/blob/main/docs/what-we-learned.md`}>
+              What we learned building on Midnight
+            </a>{" "}
+            — what node error 117 really is, the DUST budget in numbers, and the
+            witness rule that makes most fraud tests meaningless.
+          </div>
+          {meta?.contractAddress && (
+            <div className="faint">
+              Deployed on Midnight {meta.network} at{" "}
+              <code>{meta.contractAddress}</code>. Apache-2.0.
+            </div>
+          )}
+        </footer>
       </main>
 
       <ChainInspector chain={chain} meta={meta} history={history} />
