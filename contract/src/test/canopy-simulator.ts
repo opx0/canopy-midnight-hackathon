@@ -57,7 +57,7 @@ export class CanopySimulator {
   }
 
   call<K extends keyof Circuits>(circuit: K, ...args: CircuitArgs<K>): Ledger {
-    const run = this.contract.impureCircuits[circuit] as (
+    const run = this.contract.impureCircuits[circuit] as unknown as (
       context: CircuitContext<CanopyPrivateState>,
       ...args: CircuitArgs<K>
     ) => { context: CircuitContext<CanopyPrivateState> };
@@ -67,6 +67,21 @@ export class CanopySimulator {
 
   retireCredit({ serial, tonnes, salt }: CreditNote): Ledger {
     return this.call("retireCredit", serial, tonnes, salt);
+  }
+
+  transferCredit(
+    { serial, tonnes, salt }: CreditNote,
+    recipient: Uint8Array,
+    freshSalt: Uint8Array,
+  ): Ledger {
+    return this.call(
+      "transferCredit",
+      serial,
+      tonnes,
+      salt,
+      recipient,
+      freshSalt,
+    );
   }
 
   as(secretKey: Uint8Array, credits: readonly CreditNote[] = []): this {

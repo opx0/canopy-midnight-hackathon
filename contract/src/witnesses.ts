@@ -18,15 +18,34 @@ export const createCanopyPrivateState = (
   credits: readonly CreditNote[] = [],
 ): CanopyPrivateState => ({ secretKey, credits });
 
+export const noteCommitment = (
+  { serial, tonnes, salt }: CreditNote,
+  secretKey: Uint8Array,
+): Uint8Array =>
+  pureCircuits.creditCommitment(
+    serial,
+    tonnes,
+    pureCircuits.companyPublicKey(secretKey),
+    salt,
+  );
+
+export const noteNullifier = (
+  credit: CreditNote,
+  secretKey: Uint8Array,
+): Uint8Array =>
+  pureCircuits.spendNullifier(noteCommitment(credit, secretKey), secretKey);
+
+// The tally is recovered, not trusted: whatever this returns has to reopen the
+// commitment already sitting in the ledger, or the circuit rejects it. Reading the
+// retirement set is simply the cheapest way to recover it after a restart. Credits
+// this company passed on land in transferredCredits instead, so they do not count.
 const tonnesRetiredAccordingToNullifierSet = (
   ledger: Ledger,
   { credits, secretKey }: CanopyPrivateState,
 ): bigint =>
   credits.reduce(
     (total, credit) =>
-      ledger.retiredCredits.member(
-        pureCircuits.retirementNullifier(credit.serial, secretKey),
-      )
+      ledger.retiredCredits.member(noteNullifier(credit, secretKey))
         ? total + credit.tonnes
         : total,
     0n,

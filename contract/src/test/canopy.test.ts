@@ -224,4 +224,142 @@ describe("canopy", () => {
     ).toStrictEqual(pureCircuits.tallyCommitment(FRAUDCORP, 900n));
     expect(sim.ledger.retiredCredits.size()).toBe(2n);
   });
+  it("moves a credit to another holder: the recipient can retire it, the sender no longer can, and the tonnage does not change", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    const freshSalt = randomBytes(32);
+    sim.as(ECOCORP, [credit]);
+    sim.transferCredit(credit, pureCircuits.companyPublicKey(FRAUDCORP), freshSalt);
+
+    expect(sim.ledger.transferEvents).toBe(1n);
+    expect(sim.ledger.transferredCredits.size()).toBe(1n);
+    expect(sim.ledger.retiredCredits.size()).toBe(0n);
+    expect(sim.ledger.retirementEvents).toBe(0n);
+    // Value is conserved: a transfer adds a leaf but never a tonne.
+    expect(sim.ledger.issuedTonnes).toBe(50_000n);
+    expect(sim.ledger.issuedCredits).toBe(1n);
+
+    const received: CreditNote = { ...credit, salt: freshSalt };
+
+    sim.as(ECOCORP, [credit]);
+    sim.call("registerCompany", "EcoCorp");
+    expect(() => sim.retireCredit(credit)).toThrow(/already been passed on/);
+
+    sim.as(FRAUDCORP, [received]);
+    sim.call("registerCompany", "OtherCorp");
+    sim.retireCredit(received);
+
+    expect(sim.ledger.retirementEvents).toBe(1n);
+    expect(
+      sim.ledger.companies.lookup(pureCircuits.companyPublicKey(FRAUDCORP)),
+    ).toStrictEqual(pureCircuits.tallyCommitment(FRAUDCORP, 600n));
+    // The sender retired nothing, and the chain agrees.
+    expect(
+      sim.ledger.companies.lookup(pureCircuits.companyPublicKey(ECOCORP)),
+    ).toStrictEqual(pureCircuits.tallyCommitment(ECOCORP, 0n));
+  });
+
+  it("refuses to send the same credit to two holders", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    sim.as(ECOCORP, [credit]);
+    sim.transferCredit(credit, pureCircuits.companyPublicKey(FRAUDCORP), randomBytes(32));
+    expect(() =>
+      sim.transferCredit(credit, pureCircuits.companyPublicKey(AUDITOR), randomBytes(32)),
+    ).toThrow(/already been passed on/);
+    expect(sim.ledger.transferEvents).toBe(1n);
+  });
+
+  it("refuses to pass on a credit that was already retired", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    sim.as(ECOCORP, [credit]);
+    sim.call("registerCompany", "EcoCorp");
+    sim.retireCredit(credit);
+    expect(() =>
+      sim.transferCredit(credit, pureCircuits.companyPublicKey(FRAUDCORP), randomBytes(32)),
+    ).toThrow(/already been retired/);
+    expect(sim.ledger.transferredCredits.size()).toBe(0n);
+  });
+
+  it("lets a credit come back to a previous holder and still be retired, which a serial-bound nullifier would have made impossible", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    const outbound = randomBytes(32);
+    sim.as(ECOCORP, [credit]);
+    sim.transferCredit(credit, pureCircuits.companyPublicKey(FRAUDCORP), outbound);
+
+    const held: CreditNote = { ...credit, salt: outbound };
+    const inbound = randomBytes(32);
+    sim.as(FRAUDCORP, [held]);
+    sim.transferCredit(held, pureCircuits.companyPublicKey(ECOCORP), inbound);
+
+    const returned: CreditNote = { ...credit, salt: inbound };
+    sim.as(ECOCORP, [returned]);
+    sim.call("registerCompany", "EcoCorp");
+    sim.retireCredit(returned);
+
+    expect(sim.ledger.retirementEvents).toBe(1n);
+    expect(sim.ledger.transferEvents).toBe(2n);
+  });
+
+  it("never writes the recipient to the chain, only a commitment nobody else can open", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    const freshSalt = randomBytes(32);
+    const recipient = pureCircuits.companyPublicKey(FRAUDCORP);
+    sim.as(ECOCORP, [credit]);
+    sim.transferCredit(credit, recipient, freshSalt);
+
+    // The recipient is not a company on chain, and the new leaf is not their key.
+    expect(sim.ledger.companies.member(recipient)).toBe(false);
+    const landed = pureCircuits.creditCommitment(
+      credit.serial,
+      credit.tonnes,
+      recipient,
+      freshSalt,
+    );
+    expect(sim.ledger.creditTree.findPathForLeaf(landed)).toBeDefined();
+    expect(landed).not.toStrictEqual(recipient);
+    for (const nullifier of sim.ledger.transferredCredits) {
+      expect(nullifier).not.toStrictEqual(recipient);
+      expect(nullifier).not.toStrictEqual(credit.serial);
+    }
+  });
+
+  it("refuses a transfer of a credit the caller does not hold", () => {
+    const credit = note(600n);
+    const sim = registryHavingIssued([credit], ECOCORP);
+
+    sim.as(FRAUDCORP, [credit]);
+    expect(() =>
+      sim.transferCredit(credit, pureCircuits.companyPublicKey(AUDITOR), randomBytes(32)),
+    ).toThrow(/no issued credit opens to your key/);
+    expect(sim.ledger.transferEvents).toBe(0n);
+  });
+
+  it("refuses a transfer whose Merkle path authenticates somebody else's credit", () => {
+    const real = note(600n);
+    const sim = registryHavingIssued([real], ECOCORP);
+    const realCommitment = commitmentFor(real, ECOCORP);
+
+    const forged = note(1_000_000n);
+    sim.as(FRAUDCORP, [forged]);
+    sim.withDishonestWitnesses({
+      creditPath: ({ ledger, privateState }) => [
+        privateState,
+        ledger.creditTree.findPathForLeaf(realCommitment)!,
+      ],
+    });
+
+    expect(() =>
+      sim.transferCredit(forged, pureCircuits.companyPublicKey(AUDITOR), randomBytes(32)),
+    ).toThrow(/path is not for this credit/);
+    expect(sim.ledger.transferredCredits.size()).toBe(0n);
+  });
 });

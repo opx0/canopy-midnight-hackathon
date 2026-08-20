@@ -6,6 +6,12 @@ export ledger creditTree: HistoricMerkleTree<10, Bytes<32>>;
 
 export ledger retiredCredits: Set<Bytes<32>>;
 
+// A credit can leave a company's hands two ways: retired, or passed to somebody else.
+// Both consume the note, so both must be nullified, and every circuit that consumes a
+// note checks both sets. Keeping them apart costs one extra membership check and buys
+// a public retirement count that a transfer cannot inflate.
+export ledger transferredCredits: Set<Bytes<32>>;
+
 export struct Batch {
   project: Opaque<"string">,
   vintage: Uint<16>,
@@ -31,6 +37,7 @@ export ledger auditorKey: Bytes<32>;
 export ledger issuedTonnes: Uint<64>;
 export ledger issuedCredits: Counter;
 export ledger retirementEvents: Counter;
+export ledger transferEvents: Counter;
 
 witness secretKey(): Bytes<32>;
 
@@ -69,8 +76,12 @@ export circuit creditCommitment(
   ]);
 }
 
-export circuit retirementNullifier(serial: Bytes<32>, sk: Bytes<32>): Bytes<32> {
-  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "canopy:retire:"), serial, sk]);
+// Bound to the commitment rather than to the serial. A serial survives a transfer, so a
+// serial-bound nullifier would let the first owner spend a note the second owner now
+// holds — or, once the first owner's nullifier was burnt, brick the credit if it ever
+// came back. The commitment changes on every hop, so each note nullifies exactly once.
+export circuit spendNullifier(commitment: Bytes<32>, sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "canopy:spend:"), commitment, sk]);
 }
 
 export circuit tallyCommitment(sk: Bytes<32>, tonnes: Uint<64>): Bytes<32> {
@@ -144,12 +155,44 @@ export circuit retireCredit(serial: Bytes<32>, tonnes: Uint<64>, salt: Bytes<32>
     "credit was never issued by the registry"
   );
 
-  const nullifier = disclose(retirementNullifier(serial, sk));
+  const nullifier = disclose(spendNullifier(commitment, sk));
   assert(!retiredCredits.member(nullifier), "credit has already been retired");
+  assert(!transferredCredits.member(nullifier), "credit has already been passed on");
   retiredCredits.insert(nullifier);
 
   companies.insert(disclose(me), disclose(tallyCommitment(sk, (current + tonnes) as Uint<64>)));
   retirementEvents.increment(1);
+}
+
+export circuit transferCredit(
+  serial: Bytes<32>,
+  tonnes: Uint<64>,
+  salt: Bytes<32>,
+  recipient: Bytes<32>,
+  freshSalt: Bytes<32>
+): [] {
+  const sk = secretKey();
+  const me = companyPublicKey(sk);
+
+  const commitment = creditCommitment(serial, tonnes, me, salt);
+  const path = creditPath(commitment);
+  assert(path.leaf == commitment, "the supplied path is not for this credit");
+  assert(
+    creditTree.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+    "credit was never issued by the registry"
+  );
+
+  const nullifier = disclose(spendNullifier(commitment, sk));
+  assert(!retiredCredits.member(nullifier), "credit has already been retired");
+  assert(!transferredCredits.member(nullifier), "credit has already been passed on");
+  transferredCredits.insert(nullifier);
+
+  // Same serial, same tonnage, new owner, new salt. Tonnage cannot change here: the
+  // old commitment had to match the tree, which binds it, and the new commitment is
+  // built from the same value. The recipient is never disclosed — only the commitment
+  // is, and the note itself travels off-chain the way a shielded memo would.
+  creditTree.insert(disclose(creditCommitment(serial, tonnes, recipient, freshSalt)));
+  transferEvents.increment(1);
 }
 
 export circuit publishClaim(claimId: Bytes<32>, threshold: Uint<64>, period: Opaque<"string">): [] {
