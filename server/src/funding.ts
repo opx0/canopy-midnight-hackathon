@@ -27,6 +27,28 @@ const night = (state: FacadeState): bigint =>
 
 const dust = (state: FacadeState): bigint => state.dust.balance(new Date());
 
+// A registered NIGHT UTxO reporting zero DUST is the one failure mode that stops this
+// deployment writing, and "balance is zero" says nothing about why. Print the wallet's
+// own view of its generating outputs so the answer is data rather than a hypothesis.
+const readable = (value: unknown): string =>
+  JSON.stringify(
+    value,
+    (_key, inner: unknown) =>
+      typeof inner === "bigint" ? inner.toString() : inner,
+  ) ?? "undefined";
+
+export const dustDetail = (state: FacadeState): Record<string, unknown> => {
+  const dustState = (state.dust as unknown as { state?: Record<string, unknown> })
+    .state;
+  const collections = Object.fromEntries(
+    Object.entries(dustState ?? {}).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? `array(${value.length})` : readable(value).slice(0, 400),
+    ]),
+  );
+  return { keys: Object.keys(dustState ?? {}), ...collections };
+};
+
 const until = (
   logger: Logger,
   wallet: WalletFacade,
@@ -38,17 +60,21 @@ const until = (
   return Rx.firstValueFrom(
     wallet.state().pipe(
       Rx.throttleTime(5_000, undefined, { leading: true, trailing: true }),
-      Rx.tap((state: FacadeState) =>
+      Rx.tap((state: FacadeState) => {
+        const seconds = Math.round((Date.now() - startedAt) / 1000);
         logger.info(
           {
             waitingFor: label,
-            seconds: Math.round((Date.now() - startedAt) / 1000),
+            seconds,
             night: night(state).toString(),
             dust: dust(state).toString(),
           },
           "waiting on wallet",
-        ),
-      ),
+        );
+        if (seconds > 0 && seconds % 60 < 6 && dust(state) === 0n) {
+          logger.info(dustDetail(state), "dust wallet internals while it reads zero");
+        }
+      }),
       Rx.filter(ready),
       Rx.timeout({
         each: timeoutMs,
@@ -88,6 +114,10 @@ export const fund = async (
 
   if (dust(state) === 0n) {
     const startedScanAt = Date.now();
+    // Where the scan resumed from. A restored wallet starts partway through, and
+    // dividing the total applied by the time since boot would claim a rate it never
+    // achieved and an ETA that never arrives.
+    let resumedAt: number | undefined;
     state = await Rx.firstValueFrom(
       wallet.state().pipe(
         Rx.throttleTime(10_000, undefined, { leading: true, trailing: true }),
@@ -95,7 +125,8 @@ export const fund = async (
           const p = current.dust.state.progress;
           const elapsed = Math.max(1, (Date.now() - startedScanAt) / 1000);
           scan.applied = Number(p.appliedIndex);
-          scan.perSecond = Math.round(scan.applied / elapsed);
+          resumedAt ??= scan.applied;
+          scan.perSecond = Math.round((scan.applied - resumedAt) / elapsed);
           scan.estimatedTotal = Math.max(
             ESTIMATED_DEPTH,
             Number(p.highestIndex),
@@ -145,28 +176,62 @@ export const fund = async (
       { total: nightUtxos(state).length, unregistered: unregistered.length },
       "NIGHT UTXOs available for DUST generation",
     );
-    if (unregistered.length > 0) {
+
+    // A wallet that is fully synced, holds registered NIGHT, and still reports zero
+    // DUST is not waiting for anything — its generation has stopped. Re-register
+    // everything rather than wait out an hour that will not change. Registration is
+    // paid for by the NIGHT being registered, not by the DUST balance, so this is the
+    // one transaction that can still be made from a standing start of nothing.
+    const stalled = dust(state) === 0n && unregistered.length === 0;
+    const toRegister = stalled ? nightUtxos(state) : unregistered;
+    if (toRegister.length > 0) {
       logger.info(
-        { utxos: unregistered.length },
-        "registering NIGHT for DUST generation",
+        { utxos: toRegister.length, stalled },
+        stalled
+          ? "DUST generation has stopped on registered NIGHT, re-registering it"
+          : "registering NIGHT for DUST generation",
       );
-      const recipe = await wallet.registerNightUtxosForDustGeneration(
-        unregistered,
-        keystore.getPublicKey(),
-        (payload: Uint8Array) => keystore.signData(payload),
-      );
-      const txId = await wallet.submitTransaction(
-        await wallet.finalizeRecipe(recipe),
-      );
-      logger.info({ txId }, "DUST registration submitted");
+      // Registering NIGHT that has never been registered is self-funding. Registering
+      // NIGHT that already is registered is an ordinary transaction, and an ordinary
+      // transaction from a wallet at zero DUST is rejected — Midnight node error 138.
+      // Worth attempting either way, never worth failing startup over.
+      try {
+        const recipe = await wallet.registerNightUtxosForDustGeneration(
+          toRegister,
+          keystore.getPublicKey(),
+          (payload: Uint8Array) => keystore.signData(payload),
+        );
+        const txId = await wallet.submitTransaction(
+          await wallet.finalizeRecipe(recipe),
+        );
+        logger.info({ txId }, "DUST registration submitted");
+      } catch (error) {
+        logger.warn(
+          { error, stalled },
+          stalled
+            ? "could not re-register NIGHT with no DUST to pay for it; this wallet needs fresh NIGHT from the faucet"
+            : "could not register NIGHT for DUST generation",
+        );
+      }
     }
+    // Do not block startup on this. If DUST has not appeared, reads still work, the
+    // contract is still readable, and every write already waits for an affordable fee
+    // and says so. Hanging the whole server on a balance is worse than starting
+    // without one.
     state = await until(
       logger,
       wallet,
       "DUST to become spendable",
       (current) => dust(current) > 0n,
-      3_600_000,
-    );
+      300_000,
+    ).catch(() => state);
+
+    if (dust(state) === 0n) {
+      logger.warn(
+        { registered: nightUtxos(state).length, address },
+        "starting with no spendable DUST — registered NIGHT is generating nothing, so writes will wait until it does",
+      );
+    }
   }
 
   logger.info(

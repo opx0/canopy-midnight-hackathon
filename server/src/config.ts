@@ -77,3 +77,8 @@ export const masterSeed =
   "0000000000000000000000000000000000000000000000000000000000000001";
 
 export const port = Number(process.env.PORT ?? 3001);
+
+// Where to copy the built frontend so a web server outside this process can serve it.
+// Restoring the DUST wallet blocks Node's event loop for minutes, and a visitor who
+// arrives during a restart should still get the page rather than a hung socket.
+export const staticMirror = process.env.CANOPY_STATIC_MIRROR;
